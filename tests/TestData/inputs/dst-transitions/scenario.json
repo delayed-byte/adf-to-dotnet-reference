@@ -1,0 +1,53 @@
+{
+  "scenario": "dst-transitions",
+  "description": "Trigger-driven runs on and after the 2026 spring-forward (2026-03-08) and fall-back (2026-11-01) days in America/Los_Angeles, with transactions at the first and last microsecond of each day, in the repeated 01:00 hour, either side of the skipped 02:00 hour, and one posted at 23:45 that KeyStone assigned to the next business date.",
+  "acceptanceTests": [
+    "AT-18"
+  ],
+  "seed": 20260308,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-03-07/settlement_001.csv",
+    "blobs/card-landing/2026-03-08/settlement_001.csv",
+    "blobs/card-landing/2026-10-31/settlement_001.csv",
+    "blobs/card-landing/2026-11-01/settlement_001.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-03-07",
+      "triggerTimeUtc": "2026-03-08T10:00:00Z",
+      "tolerance": "0.00"
+    },
+    {
+      "run": 2,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-03-08",
+      "triggerTimeUtc": "2026-03-09T10:00:00Z",
+      "tolerance": "0.00"
+    },
+    {
+      "run": 3,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-10-31",
+      "triggerTimeUtc": "2026-11-01T11:00:00Z",
+      "tolerance": "0.00"
+    },
+    {
+      "run": 4,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-01",
+      "triggerTimeUtc": "2026-11-02T11:00:00Z",
+      "tolerance": "0.00"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/hooks/recon-alerts/[A-Za-z0-9_-]+",
+    "headers": {
+      "Content-Type": { "contains": "application/json" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "body": "{\"accepted\":true}"
+  }
+}

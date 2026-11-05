@@ -1,0 +1,30 @@
+{
+  "scenario": "recon-card-off-by-one-cent",
+  "description": "One settlement detail is 0.01 higher than the KeyStone card transaction it settles. The card check finds a difference of 0.01; one exception row is written and exactly one alert is posted. The GL check reconciles.",
+  "acceptanceTests": [
+    "AT-13"
+  ],
+  "seed": 20261110,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-11-04/settlement_001.csv",
+    "blobs/card-landing/2026-11-04/settlement_002.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

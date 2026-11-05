@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Test harness (Phase 2, ADR 0006): Testcontainers fixtures for Db2, SQL Server and Azurite,
+    scenario loaders, database snapshots and golden comparison, KeyBridge and alert-webhook stubs
+    (WireMock.Net, in process) and a fault-injecting TCP proxy. No test-framework dependency:
+    test projects wrap BatchEnvironment in their own fixtures.
+  -->
+  <PropertyGroup>
+    <RootNamespace>CreditUnion.Batch.TestHarness</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TestData\generator\CreditUnion.Batch.TestData.csproj" />
+    <ProjectReference Include="..\..\tools\CreditUnion.Batch.DbDeploy\CreditUnion.Batch.DbDeploy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Net.IBM.Data.Db2" />
+    <PackageReference Include="Testcontainers.Azurite" />
+    <PackageReference Include="Testcontainers.Db2" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="WireMock.Net.Minimal" />
+  </ItemGroup>
+</Project>

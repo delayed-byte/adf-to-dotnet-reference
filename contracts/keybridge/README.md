@@ -2,8 +2,12 @@
 
 KeyBridge's real request and response formats are proprietary and not yet available. This is the
 placeholder contract the team owns. All calls go through `IKeyBridgeClient`, so replacing it with
-the real specification is a contained change. WireMock mappings that implement it are added in
-`mappings/` (Phase 2).
+the real specification is a contained change.
+
+| File | Used by |
+| --- | --- |
+| `__files/gl-mappings.json` | The response body: the transaction-code-to-GL mapping. The tests' stub (`KeyBridgeStub`) serves it unless a scenario overrides it, and the golden outputs are derived from it (ADR 0006). |
+| `mappings/*.json` | WireMock mappings for the `docker-compose` stub (port 8081) used with `./build.ps1 run`: this endpoint, plus the reconciliation alert webhook `POST /hooks/recon-alerts/{token}`. |
 
 ## GET `/v1/reference/transaction-codes/gl-mappings`
 

@@ -1,0 +1,363 @@
+{
+  "scenario": "dst-transitions",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 171,
+      "sha256": "eeba8d56f6434ccb7ede315acffc872c307eda7b0368f77d96b1eb3bea718084",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 44,
+      "sha256": "32cc40ce93dcfa28bd8b794edce85771a31e217032877e2816d7c0427b104103",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 48,
+      "sha256": "e081eeffc8e06511c2f6cd4f056f46d2a101bb1b92a0f27084a59540b4968e77",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 51,
+      "sha256": "71900e6c638bb5a2d643de9bfcf6bcdbacdb1d65a8758961dbacb2011ecb62d7",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 4,
+      "sha256": "cff33a851e8cc15ceceb9d4d01a0483ab98c974b864f6f559a8eaf5be3ad0f70",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ref.TxnCodeGlMap",
+      "file": "tables/ref.TxnCodeGlMap.csv",
+      "rowCount": 21,
+      "sha256": "6594962706fcc31ec174243fc32d23b052539233f9798e4f7fbba774334d7515",
+      "keyColumns": [
+        "TxnCode",
+        "GlAccountNbr",
+        "DrCr"
+      ]
+    },
+    {
+      "name": "core.DailyGlTotals",
+      "file": "tables/core.DailyGlTotals.csv",
+      "rowCount": 34,
+      "sha256": "8545692471645132207077bf04513416e1aa9969a62be86d36766c34741f069f",
+      "keyColumns": [
+        "BusinessDate",
+        "GlAccountNbr"
+      ]
+    },
+    {
+      "name": "ops.ReconExceptions",
+      "file": "tables/ops.ReconExceptions.csv",
+      "rowCount": 0,
+      "sha256": "6191af985ed1fa8cae39eedc6c47f8ad09ed9b0bdd9b911f97e507153f0a1b00",
+      "keyColumns": [
+        "BusinessDate",
+        "CheckName",
+        "ItemKey",
+        "Difference"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 68,
+      "sha256": "e8594d172417aeda0628eb4a77afd6ba02b3ec93e4cdffde4afa8869f1cc20f4",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-03-07",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-1.json"
+    },
+    {
+      "run": 2,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-03-08",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-2.json"
+    },
+    {
+      "run": 3,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-10-31",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-3.json"
+    },
+    {
+      "run": 4,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-01",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-4.json"
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-archive",
+      "name": "2026-03-07/settlement_001.csv",
+      "sha256": "29ebc2440626a1b99e94a44825cd3e1a831024023618b7906dcb958c830063a4",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-03-08/settlement_001.csv",
+      "sha256": "6199d36ddebdbc0c99c7423a9b13395612c23be11962da4e9949f8f1e7a984e6",
+      "metadata": {
+        "batch_run_id": "{run:2}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-10-31/settlement_001.csv",
+      "sha256": "ac8369e1c9a9396038d0be0defa08943722b506709781fc67852f3a8af473c97",
+      "metadata": {
+        "batch_run_id": "{run:3}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-11-01/settlement_001.csv",
+      "sha256": "998dbcd607d73bc5ac9e339b1073280d5ba62bf3357b2c1c309e676ef2df04b9",
+      "metadata": {
+        "batch_run_id": "{run:4}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "evidence",
+      "name": "2026-03-07/batch-run-{run:1}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-1.json"
+    },
+    {
+      "container": "evidence",
+      "name": "2026-03-08/batch-run-{run:2}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-2.json"
+    },
+    {
+      "container": "evidence",
+      "name": "2026-10-31/batch-run-{run:3}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-3.json"
+    },
+    {
+      "container": "evidence",
+      "name": "2026-11-01/batch-run-{run:4}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-4.json"
+    }
+  ],
+  "schedule": [
+    {
+      "localDate": "2026-03-06",
+      "fireTimeLocal": "2026-03-06T03:00:00-08:00",
+      "fireTimeUtc": "2026-03-06T11:00:00Z",
+      "businessDate": "2026-03-05"
+    },
+    {
+      "localDate": "2026-03-07",
+      "fireTimeLocal": "2026-03-07T03:00:00-08:00",
+      "fireTimeUtc": "2026-03-07T11:00:00Z",
+      "businessDate": "2026-03-06"
+    },
+    {
+      "localDate": "2026-03-08",
+      "fireTimeLocal": "2026-03-08T03:00:00-07:00",
+      "fireTimeUtc": "2026-03-08T10:00:00Z",
+      "businessDate": "2026-03-07"
+    },
+    {
+      "localDate": "2026-03-09",
+      "fireTimeLocal": "2026-03-09T03:00:00-07:00",
+      "fireTimeUtc": "2026-03-09T10:00:00Z",
+      "businessDate": "2026-03-08"
+    },
+    {
+      "localDate": "2026-03-10",
+      "fireTimeLocal": "2026-03-10T03:00:00-07:00",
+      "fireTimeUtc": "2026-03-10T10:00:00Z",
+      "businessDate": "2026-03-09"
+    },
+    {
+      "localDate": "2026-10-30",
+      "fireTimeLocal": "2026-10-30T03:00:00-07:00",
+      "fireTimeUtc": "2026-10-30T10:00:00Z",
+      "businessDate": "2026-10-29"
+    },
+    {
+      "localDate": "2026-10-31",
+      "fireTimeLocal": "2026-10-31T03:00:00-07:00",
+      "fireTimeUtc": "2026-10-31T10:00:00Z",
+      "businessDate": "2026-10-30"
+    },
+    {
+      "localDate": "2026-11-01",
+      "fireTimeLocal": "2026-11-01T03:00:00-08:00",
+      "fireTimeUtc": "2026-11-01T11:00:00Z",
+      "businessDate": "2026-10-31"
+    },
+    {
+      "localDate": "2026-11-02",
+      "fireTimeLocal": "2026-11-02T03:00:00-08:00",
+      "fireTimeUtc": "2026-11-02T11:00:00Z",
+      "businessDate": "2026-11-01"
+    },
+    {
+      "localDate": "2026-11-03",
+      "fireTimeLocal": "2026-11-03T03:00:00-08:00",
+      "fireTimeUtc": "2026-11-03T11:00:00Z",
+      "businessDate": "2026-11-02"
+    }
+  ]
+}

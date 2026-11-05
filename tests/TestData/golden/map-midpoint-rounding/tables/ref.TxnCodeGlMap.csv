@@ -1,0 +1,22 @@
+TxnCode,GlAccountNbr,DrCr,AllocationRatio,Description,SourceVersion
+ACHC,"1110      ",D,1.000000,Due from Federal Reserve - ACH,2026-11-01
+ACHC,"2100      ",C,1.000000,Member share accounts,2026-11-01
+ACHD,"1110      ",C,1.000000,Due from Federal Reserve - ACH,2026-11-01
+ACHD,"2100      ",D,1.000000,Member share accounts,2026-11-01
+ATMW,"1020      ",C,1.000000,Cash - ATM network,2026-11-01
+ATMW,"2100      ",D,1.000000,Member share accounts,2026-11-01
+CPOS,"2100      ",D,1.000000,Member share accounts,2026-11-01
+CPOS,"2400      ",C,1.000000,Card settlement payable,2026-11-01
+CRFD,"2100      ",C,1.000000,Member share accounts,2026-11-01
+CRFD,"2400      ",D,1.000000,Card settlement payable,2026-11-01
+DEP1,"1010      ",D,1.000000,Cash on hand - branch vault,2026-11-01
+DEP1,"2100      ",C,1.000000,Member share accounts,2026-11-01
+DIVP,"2100      ",C,1.000000,Member share accounts,2026-11-01
+DIVP,"5100      ",D,1.000000,Dividend expense,2026-11-01
+FEE1,"2100      ",D,1.000000,Member share accounts,2026-11-01
+FEE1,"4300      ",C,1.000000,Fee income - service charges,2026-11-01
+LPMT,"1300      ",C,0.750000,Loans to members - principal,2026-11-01
+LPMT,"2100      ",D,1.000000,Member share accounts,2026-11-01
+LPMT,"4100      ",C,0.250000,Loan interest income,2026-11-01
+WDL1,"1010      ",C,1.000000,Cash on hand - branch vault,2026-11-01
+WDL1,"2100      ",D,1.000000,Member share accounts,2026-11-01

@@ -1,0 +1,92 @@
+{
+  "scenario": "card-quarantine-trailer-mismatch",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 32,
+      "sha256": "7a8bdc020b6d151b596df2497a03c9699c524b01da2d11c8f535cfb4627407a9",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 3,
+      "sha256": "4eb0a6cfdeb98d6d7bf573360e211270005b6cdeb27aaf58942bd1c0e88e3bd1",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 3,
+      "sha256": "de16afd4983bf9b53d0f57be302288d8da9040aab52213a81f930db12776f7ea",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_IngestCardSettlement",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_IngestCardSettlement"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [],
+      "messages": [],
+      "keyBridgeRequests": 0,
+      "alerts": [],
+      "evidence": null
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_001.csv",
+      "sha256": "f70fb990506a2df684cbc55ae08c56db28890d109bc00a853f90ffb0697fff62",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_003.csv",
+      "sha256": "4d39a89c9b5ee20cdceaefaf65f063a4e8a331604c361e88c297c552e917fe38",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-quarantine",
+      "name": "2026-11-04/settlement_002.csv",
+      "sha256": "bb4d1940e16fafff72c564b7260fc01b63c730d9a0a2e93e54b37127ea0f7c4d",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-quarantine",
+      "name": "2026-11-04/settlement_002.csv.errors.json",
+      "sha256": null,
+      "metadata": {},
+      "goldenFile": "blobs/card-quarantine/2026-11-04/settlement_002.csv.errors.json"
+    }
+  ],
+  "schedule": null
+}

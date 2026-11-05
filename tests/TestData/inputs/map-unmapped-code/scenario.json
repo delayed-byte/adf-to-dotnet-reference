@@ -1,0 +1,30 @@
+{
+  "scenario": "map-unmapped-code",
+  "description": "KeyStone posted three transactions with a new code, P2PD, that the KeyBridge mapping does not cover. Map and Aggregate fails with TXN_CODE_UNMAPPED naming P2PD; the master records the failure at the Map step and does not run Reconciliation.",
+  "acceptanceTests": [
+    "AT-09",
+    "AT-15"
+  ],
+  "seed": 20261108,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-11-04/settlement_001.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

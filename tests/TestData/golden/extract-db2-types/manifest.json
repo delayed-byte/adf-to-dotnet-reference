@@ -1,0 +1,61 @@
+{
+  "scenario": "extract-db2-types",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 5,
+      "sha256": "b4d018af3a540e2adcd98abb30c4ce65d45fc0a928837060dfed329b51a776f0",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 6,
+      "sha256": "55747868a48d4c421064d7d5e04a436849e760f5220cbe70458cec47f65722b3",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 3,
+      "sha256": "a02ed86b24c1dcc437c90be24abf17f3c4ef0eeaa32ba31142c6401943146676",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 8,
+      "sha256": "4705ce7dd6b9179b44d11f3777c2d365a4d7a7d098300a63a7e53e94f1f84889",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_ExtractKeyStone",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_ExtractKeyStone"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [],
+      "messages": [],
+      "keyBridgeRequests": 0,
+      "alerts": [],
+      "evidence": null
+    }
+  ],
+  "blobs": [],
+  "schedule": null
+}

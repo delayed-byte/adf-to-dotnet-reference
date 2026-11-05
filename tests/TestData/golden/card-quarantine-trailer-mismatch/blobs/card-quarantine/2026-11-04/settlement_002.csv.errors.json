@@ -1,0 +1,11 @@
+[
+  {
+    "businessDate": "2026-11-04",
+    "sourceFile": "settlement_002.csv",
+    "batchRunId": "{run:1}",
+    "recordType": "T",
+    "processorRefNbr": null,
+    "errorCode": "TRAILER_COUNT_MISMATCH",
+    "errorMessage": "Trailer record count 17 does not match 16 detail records."
+  }
+]

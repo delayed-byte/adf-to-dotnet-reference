@@ -1,0 +1,52 @@
+Run,BusinessDate,PipelineName,StepName,Status,ObjectName,RecordCount,ErrorCode,Notes
+1,2026-11-03,PL_Master_NightlyBatch,\N,Started,\N,\N,\N,\N
+1,2026-11-03,PL_ExtractKeyStone,\N,Started,\N,\N,\N,\N
+1,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsPostedTxn,150,\N,\N
+1,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsAccount,28,\N,\N
+1,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsGlEntry,15,\N,\N
+1,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.Account,28,\N,staged=28; inserted=28; updated=0; unchanged=0
+1,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.PostedTransaction,150,\N,staged=150; inserted=150; updated=0; unchanged=0
+1,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.GlEntry,15,\N,staged=15; inserted=15; updated=0; unchanged=0
+1,2026-11-03,PL_ExtractKeyStone,\N,Succeeded,\N,3,\N,Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).
+1,2026-11-03,PL_IngestCardSettlement,\N,Started,\N,\N,\N,\N
+1,2026-11-03,PL_IngestCardSettlement,MergeCardSettlement,Succeeded,core.CardSettlement,52,\N,staged=52; inserted=52; updated=0; unchanged=0
+1,2026-11-03,PL_IngestCardSettlement,\N,Succeeded,\N,1,\N,1 settlement file(s) processed; see ops.CardFileLog.
+1,2026-11-03,PL_MapAndAggregate,\N,Started,\N,\N,\N,\N
+1,2026-11-03,PL_MapAndAggregate,\N,Succeeded,core.DailyGlTotals,\N,\N,\N
+1,2026-11-03,PL_Reconciliation,\N,Started,\N,\N,\N,\N
+1,2026-11-03,PL_Reconciliation,\N,Reconciled,\N,0,\N,card difference=0.00; GL items out of tolerance=0; tolerance=0.00
+1,2026-11-03,PL_Master_NightlyBatch,\N,Succeeded,evidence/2026-11-03/batch-run-{batchRunId}.json,\N,\N,\N
+2,2026-11-04,PL_Master_NightlyBatch,\N,Started,\N,\N,\N,\N
+2,2026-11-04,PL_ExtractKeyStone,\N,Started,\N,\N,\N,\N
+2,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsPostedTxn,150,\N,\N
+2,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsAccount,50,\N,\N
+2,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsGlEntry,15,\N,\N
+2,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.Account,50,\N,staged=50; inserted=50; updated=0; unchanged=0
+2,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.PostedTransaction,150,\N,staged=150; inserted=150; updated=0; unchanged=0
+2,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.GlEntry,15,\N,staged=15; inserted=15; updated=0; unchanged=0
+2,2026-11-04,PL_ExtractKeyStone,\N,Succeeded,\N,3,\N,Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).
+2,2026-11-04,PL_IngestCardSettlement,\N,Started,\N,\N,\N,\N
+2,2026-11-04,PL_IngestCardSettlement,MergeCardSettlement,Succeeded,core.CardSettlement,66,\N,staged=66; inserted=66; updated=0; unchanged=0
+2,2026-11-04,PL_IngestCardSettlement,\N,Succeeded,\N,1,\N,1 settlement file(s) processed; see ops.CardFileLog.
+2,2026-11-04,PL_MapAndAggregate,\N,Started,\N,\N,\N,\N
+2,2026-11-04,PL_MapAndAggregate,\N,Succeeded,core.DailyGlTotals,\N,\N,\N
+2,2026-11-04,PL_Reconciliation,\N,Started,\N,\N,\N,\N
+2,2026-11-04,PL_Reconciliation,\N,Reconciled,\N,0,\N,card difference=0.00; GL items out of tolerance=0; tolerance=0.00
+2,2026-11-04,PL_Master_NightlyBatch,\N,Succeeded,evidence/2026-11-04/batch-run-{batchRunId}.json,\N,\N,\N
+3,2026-11-03,PL_Master_NightlyBatch,\N,Started,\N,\N,\N,\N
+3,2026-11-03,PL_ExtractKeyStone,\N,Started,\N,\N,\N,\N
+3,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsPostedTxn,150,\N,\N
+3,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsAccount,28,\N,\N
+3,2026-11-03,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsGlEntry,15,\N,\N
+3,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.Account,28,\N,staged=28; inserted=0; updated=0; unchanged=28
+3,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.PostedTransaction,150,\N,staged=150; inserted=0; updated=0; unchanged=150
+3,2026-11-03,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.GlEntry,15,\N,staged=15; inserted=0; updated=0; unchanged=15
+3,2026-11-03,PL_ExtractKeyStone,\N,Succeeded,\N,3,\N,Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).
+3,2026-11-03,PL_IngestCardSettlement,\N,Started,\N,\N,\N,\N
+3,2026-11-03,PL_IngestCardSettlement,MergeCardSettlement,Succeeded,core.CardSettlement,0,\N,staged=0; inserted=0; updated=0; unchanged=0
+3,2026-11-03,PL_IngestCardSettlement,\N,Succeeded,\N,0,\N,No settlement files found in the landing folder.
+3,2026-11-03,PL_MapAndAggregate,\N,Started,\N,\N,\N,\N
+3,2026-11-03,PL_MapAndAggregate,\N,Succeeded,core.DailyGlTotals,\N,\N,\N
+3,2026-11-03,PL_Reconciliation,\N,Started,\N,\N,\N,\N
+3,2026-11-03,PL_Reconciliation,\N,Reconciled,\N,0,\N,card difference=0.00; GL items out of tolerance=0; tolerance=0.00
+3,2026-11-03,PL_Master_NightlyBatch,\N,Succeeded,evidence/2026-11-03/batch-run-{batchRunId}.json,\N,\N,\N

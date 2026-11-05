@@ -1,0 +1,43 @@
+{
+  "scenario": "standard-day",
+  "description": "Seeded business day 2026-11-04: 5,000 transactions on 800 accounts, 300 GL entries and three valid settlement files, with distractors (the previous day's data and files, non-matching names and a subfolder in the landing folder). Full nightly batch; everything reconciles.",
+  "acceptanceTests": [
+    "AT-01",
+    "AT-02",
+    "AT-04",
+    "AT-05",
+    "AT-08",
+    "AT-11",
+    "AT-12",
+    "AT-14",
+    "AT-17"
+  ],
+  "seed": 20261104,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-11-03/settlement_001.csv",
+    "blobs/card-landing/2026-11-04/settlement_001.csv",
+    "blobs/card-landing/2026-11-04/settlement_002.csv",
+    "blobs/card-landing/2026-11-04/settlement_003.csv",
+    "blobs/card-landing/2026-11-04/readme.txt",
+    "blobs/card-landing/2026-11-04/settlement_004.csv.tmp",
+    "blobs/card-landing/2026-11-04/old/settlement_000.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

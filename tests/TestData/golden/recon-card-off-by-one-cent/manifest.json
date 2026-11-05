@@ -1,0 +1,161 @@
+{
+  "scenario": "recon-card-off-by-one-cent",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 300,
+      "sha256": "7b1db257ec22f187a7e3ce5588a65f07586a077d6565f5b094cc6cd857e64223",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 80,
+      "sha256": "ce8a96f7cf205503d20e35a15358d60fee41d259dedc5740236c13e5cb9faed9",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 25,
+      "sha256": "960c0bd7366cc4b5926e396ce9958696e8f77eaca14d2f3242591c1fcd7a5a7a",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 107,
+      "sha256": "a51e8c8d7b76e9221f05afe9db0355dfc5bf1c1678358537628f929a62e2aeea",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 2,
+      "sha256": "4c45356fd3fe9909fc8dfa4d29106c3b431c65bd92fc7410e691da1a96c36a0f",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ref.TxnCodeGlMap",
+      "file": "tables/ref.TxnCodeGlMap.csv",
+      "rowCount": 21,
+      "sha256": "6594962706fcc31ec174243fc32d23b052539233f9798e4f7fbba774334d7515",
+      "keyColumns": [
+        "TxnCode",
+        "GlAccountNbr",
+        "DrCr"
+      ]
+    },
+    {
+      "name": "core.DailyGlTotals",
+      "file": "tables/core.DailyGlTotals.csv",
+      "rowCount": 9,
+      "sha256": "188fac9a942766c14023c679655a4bd1d986027ef3ac239de3a48f94f4fcd53b",
+      "keyColumns": [
+        "BusinessDate",
+        "GlAccountNbr"
+      ]
+    },
+    {
+      "name": "ops.ReconExceptions",
+      "file": "tables/ops.ReconExceptions.csv",
+      "rowCount": 1,
+      "sha256": "7cc3fc9dd71c307f0fc7f0b0ec38397a97520c100db633129a90d62c1e711088",
+      "keyColumns": [
+        "BusinessDate",
+        "CheckName",
+        "ItemKey",
+        "Difference"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 17,
+      "sha256": "9702c4206bdd424050509d5b824740b75a116d6277dff39ad48edf1f140bebdb",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [
+        "alerts/run-1-alert-1.json"
+      ],
+      "evidence": "evidence/run-1.json"
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_001.csv",
+      "sha256": "1082734c83c5f55d2b835ea54c05cd237424dbfa6f136631cb95c50459132b23",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_002.csv",
+      "sha256": "3adcc55c42df60d9d73e8cd5e1fde2972650e713c23811a2c9351a800d9e5a88",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "evidence",
+      "name": "2026-11-04/batch-run-{run:1}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-1.json"
+    }
+  ],
+  "schedule": null
+}

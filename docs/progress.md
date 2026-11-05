@@ -57,3 +57,63 @@
 **Notes for later phases:**
 - VS Code's T-SQL language service flags Db2 syntax in `db/keystone-db2/*.sql` (e.g. `GRANT ... TO USER`). These are false positives; Db2 accepts the scripts.
 - `PUBLIC` holds no database authorities but does hold EXECUTE on the 89 `NULLID` CLI packages (including `SYSSH200`), so the .NET driver works as `KSEXTRACT` without extra grants.
+
+## Phase 2 – Test harness and data (2026-11-05)
+
+**Decisions:**
+- ADR 0005 (Db2 type handling) is based on probes against the real driver and database, and `TypeHandlingProbeTests` pins each observed behaviour.
+  - `DB2DataReader.GetDecimal` silently rounds DECIMAL(31,8), and string parameters lose digits, so decimals go through `DB2Decimal` and `SqlDecimal`.
+  - Under the default collation, SQL Server `varchar` silently best-fits text outside Windows-1252, so migration 0007 moves the six extracted free-text columns to a UTF-8 collation.
+  - CHAR padding, TIMESTAMP values and DATE values are copied verbatim, with no time-zone conversion.
+- ADR 0006 covers the harness, the golden format, the checksum and comparison rules, how golden outputs are derived, and the ADF semantics they encode, which need human sign-off.
+
+**Generator and oracle (`tests/TestData/generator`, `CreditUnion.Batch.TestData`):**
+- Seeded SplitMix64 data with forked streams.
+- A world builder keeps GL entries and settlement files consistent with the transactions.
+- `BatchOracle` states the five pipelines in memory; golden outputs are its state after a scenario's runs.
+- `./build.ps1 golden` regenerates the committed files.
+
+**Scenarios:** ten, covering AT-01–AT-18 and the performance NFR (catalogue in `tests/TestData/README.md`).
+- Inputs and golden files total about 3 MB.
+- `perf-extract-1m` commits only its manifest; its 135 MB of inputs are regenerated into the git-ignored `tests/TestData/generated`.
+- Each scenario has a `summary.md`. The review checklist and sign-off table are in `tests/TestData/REVIEW.md`.
+
+**Harness (`tests/CreditUnion.Batch.TestHarness`):**
+- `BatchEnvironment`: Testcontainers Db2, SQL Server and Azurite, started once per run with generated passwords. `CU_TESTS_USE_COMPOSE=1` reuses the `up` stack.
+- Deployment uses the DbUp deployers; reset uses TRUNCATE (bypassing the append-only triggers) and deletes the Db2 scenario rows.
+- Loaders for Db2 rows and landing blobs; canonical SQL snapshots.
+- `GoldenAssert`: row counts, order-independent SHA-256, keyed diffs showing the first 20 mismatches, blobs, error manifests, evidence and alerts.
+- WireMock.Net stubs: KeyBridge (Basic auth, `FailNextRequests`) and the alert webhook (secret-token URL).
+- `FaultInjectingTcpProxy` for AT-04.
+- WireMock mappings for the compose stack are in `contracts/keybridge/mappings`.
+
+**Gate (harness self-tests):**
+- **UnitTests: 77 pass**, plus 1 `Category=Performance`.
+  - Known answers: PRNG vectors and the checksum.
+  - CSV, diff and canonical values.
+  - Rounding, settlement rules and DST schedule, all hand-checked.
+  - Byte-for-byte drift of every committed scenario.
+  - Manifest checksums and input constraints.
+  - Synthetic-data safety: no SSN-like values, no Luhn-valid card numbers, reserved ranges only.
+  - Stubs, the fault proxy and JSON equivalence.
+- **AcceptanceTests: 45 harness self-tests pass against real containers.**
+  - Environment and reset.
+  - Type probes.
+  - Lossless Db2 and blob round trips for every scenario.
+  - Golden extract tables equal the Db2 source rows read by the ADR 0005 rules.
+  - Every scenario replayed through the Phase 1 procedures, with an independent T-SQL data-flow rule, agrees with its golden outputs.
+  - Six malformed settlement files give identical results from the C# port and `stg.usp_ValidateCardSettlementFile`.
+- `dotnet list package --vulnerable --include-transitive`: none. Build: warnings as errors, clean.
+- `./build.ps1 scan`: no leaks. The new `.gitleaks.toml` excludes only git-ignored local files (`.env`, `bin`/`obj`, `tests/TestData/generated`). Before it, `detect --no-git` flagged the generated `.env` on any machine that had run `up`.
+
+**Phase 1 defects found by the cross-check (fixed):**
+- `ops.usp_GetRunEvidence` failed to deploy after migration 0007: `STRING_AGG` could not resolve the mixed collations. Each checksum line now states its collation explicitly.
+- The same procedure hashed a NULL `char(4)` Mcc as `'\N  '`, because `ISNULL` takes the first argument's type. It now converts to `nvarchar` first, as its comment specifies.
+
+**Notes for later phases:**
+- Golden outputs are not yet signed off. The review in `tests/TestData/REVIEW.md` is due before Phase 3. Open questions:
+  - Is the settlement file filter case-insensitive, as ADF's `startsWith` is?
+  - Does the master's `ErrorCode` carry the child's code?
+- Phase 3 needs an in-process orchestration runner (a test `TaskOrchestrationContext`) that executes activities directly. With virtual time, retries "per policy" (30 s intervals) can be asserted without waiting.
+- The Db2 loader inserts row by row (standard-day loads in a few seconds). `perf-extract-1m` will need `DB2BulkCopy` or `LOAD` in Phase 4.
+- Known limitation (ADR 0005): merge change detection ignores trailing-space-only and case-only corrections.

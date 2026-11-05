@@ -1,0 +1,29 @@
+{
+  "scenario": "card-empty-landing",
+  "description": "No settlement files for 2026-11-04 (the folder does not exist); a file for 2026-11-03 must be left alone. Card ingestion succeeds with zero rows and logs that no files were found.",
+  "acceptanceTests": [
+    "AT-07"
+  ],
+  "seed": 20261107,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-11-03/settlement_001.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_IngestCardSettlement",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/v1/reference/transaction-codes/gl-mappings",
+    "headers": {
+      "Accept": { "contains": "application/json" },
+      "Authorization": { "matches": "Basic .+" },
+      "X-Correlation-Id": { "matches": ".+" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "bodyFileName": "gl-mappings.json"
+  }
+}

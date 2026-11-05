@@ -1,0 +1,5 @@
+Run,BusinessDate,SourceFile,Outcome,DetailRowCount,TrailerRowCount,DetailTotalAmount,TrailerTotalAmount,ErrorSummary,DestinationPath
+1,2026-03-07,settlement_001.csv,Archived,11,11,393.55,393.55,\N,card-archive/2026-03-07/settlement_001.csv
+2,2026-03-08,settlement_001.csv,Archived,16,16,1281.66,1281.66,\N,card-archive/2026-03-08/settlement_001.csv
+3,2026-10-31,settlement_001.csv,Archived,11,11,534.55,534.55,\N,card-archive/2026-10-31/settlement_001.csv
+4,2026-11-01,settlement_001.csv,Archived,13,13,1054.52,1054.52,\N,card-archive/2026-11-01/settlement_001.csv

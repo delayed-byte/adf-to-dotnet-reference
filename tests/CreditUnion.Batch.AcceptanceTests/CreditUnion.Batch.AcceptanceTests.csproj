@@ -8,6 +8,10 @@
     <ProjectReference Include="..\..\src\CreditUnion.Batch.Core\CreditUnion.Batch.Core.csproj" />
     <ProjectReference Include="..\..\src\CreditUnion.Batch.KeyStone\CreditUnion.Batch.KeyStone.csproj" />
     <ProjectReference Include="..\..\src\CreditUnion.Batch.Functions\CreditUnion.Batch.Functions.csproj" />
+    <ProjectReference Include="..\CreditUnion.Batch.TestHarness\CreditUnion.Batch.TestHarness.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

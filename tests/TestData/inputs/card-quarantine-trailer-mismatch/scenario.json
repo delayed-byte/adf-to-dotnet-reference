@@ -1,0 +1,31 @@
+{
+  "scenario": "card-quarantine-trailer-mismatch",
+  "description": "Three settlement files; the second claims one more detail record in its trailer than it contains. That file is quarantined with an error manifest; the other two load.",
+  "acceptanceTests": [
+    "AT-06"
+  ],
+  "seed": 20261106,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [
+    "blobs/card-landing/2026-11-04/settlement_001.csv",
+    "blobs/card-landing/2026-11-04/settlement_002.csv",
+    "blobs/card-landing/2026-11-04/settlement_003.csv"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_IngestCardSettlement",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

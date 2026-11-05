@@ -6,7 +6,8 @@
     ./build.ps1 up      # start Db2, SQL Server, Azurite, WireMock, Aspire dashboard
     ./build.ps1 build   # dotnet build, warnings as errors
     ./build.ps1 seed    # deploy the Db2 and SQL Server schemas (DbUp); requires 'up'
-    ./build.ps1 test    # run the test suite
+    ./build.ps1 test    # run the test suite (Category=Performance excluded; add -Performance to run only those)
+    ./build.ps1 golden  # regenerate tests/TestData inputs and golden outputs (add -Scenario NAME for one)
     ./build.ps1 run     # start the Functions host (requires Azure Functions Core Tools)
     ./build.ps1 scan    # gitleaks secret scan (via Docker)
     ./build.ps1 down    # stop containers (add -Volumes to delete data)
@@ -14,9 +15,11 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('up', 'down', 'build', 'seed', 'test', 'run', 'scan')]
+    [ValidateSet('up', 'down', 'build', 'seed', 'test', 'golden', 'run', 'scan')]
     [string]$Command = 'build',
-    [switch]$Volumes
+    [switch]$Volumes,
+    [switch]$Performance,
+    [string[]]$Scenario = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -98,7 +101,16 @@ switch ($Command) {
         }
     }
     'test' {
-        Invoke-Native dotnet @('test', '--solution', 'AdfToDotnet.sln', '--nologo')
+        # Testcontainers starts its own Db2, SQL Server and Azurite (first Db2 start: 1-3 minutes).
+        # Set CU_TESTS_USE_COMPOSE=1 to reuse the './build.ps1 up' stack instead.
+        $filter = if ($Performance) { @('--filter-trait', 'Category=Performance') } else { @('--filter-not-trait', 'Category=Performance') }
+        Invoke-Native dotnet (@('test', '--solution', 'AdfToDotnet.sln', '--nologo', '--') + $filter)
+    }
+    'golden' {
+        # Golden outputs change only through the generator; review the diff (tests/TestData/REVIEW.md).
+        $generatorArgs = @('run', '--project', 'tests/TestData/generator', '--')
+        foreach ($name in $Scenario) { $generatorArgs += @('--scenario', $name) }
+        Invoke-Native dotnet $generatorArgs
     }
     'run' {
         if (-not (Get-Command func -ErrorAction SilentlyContinue)) {

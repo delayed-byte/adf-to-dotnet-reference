@@ -9,6 +9,10 @@
 docker-compose*.yml text eol=lf
 contracts/** text eol=lf
 db/** text eol=lf
+# Scenario inputs and golden outputs are compared byte for byte (ADR 0006). The generator writes LF
+# and no CR anywhere, so eol=lf keeps them identical on every checkout while diffs stay readable.
+tests/TestData/inputs/** text eol=lf
+tests/TestData/golden/** text eol=lf
 
 *.ps1 text eol=crlf
 *.cs text eol=crlf

@@ -1,0 +1,149 @@
+{
+  "scenario": "map-unmapped-code",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 203,
+      "sha256": "45b471c515aa8891f7f534c98c6181d2c8994a280f16389e7bc93faab6a0e55d",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 60,
+      "sha256": "ccb341c96a614fa15d3e462575c60e99717220ec2f8f2fcd6a217dedd39639cd",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 20,
+      "sha256": "b172de15947e9728abbe9f0055491733a6303c889d59b0c7901ccaa062c7e25a",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 67,
+      "sha256": "f34143e771299dda96ba2c7bb149f78cae71e834254b9f6b014df974303afaa9",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 1,
+      "sha256": "95aa38b9688087e3d15b7aeddd8560850c7cf574eefbc3239c56ee331939fc67",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ref.TxnCodeGlMap",
+      "file": "tables/ref.TxnCodeGlMap.csv",
+      "rowCount": 21,
+      "sha256": "6594962706fcc31ec174243fc32d23b052539233f9798e4f7fbba774334d7515",
+      "keyColumns": [
+        "TxnCode",
+        "GlAccountNbr",
+        "DrCr"
+      ]
+    },
+    {
+      "name": "core.DailyGlTotals",
+      "file": "tables/core.DailyGlTotals.csv",
+      "rowCount": 0,
+      "sha256": "e23fcbdc3bb07647bb36ddfe95e2eb3e7538e90aafd11551012aa9abf2bd5046",
+      "keyColumns": [
+        "BusinessDate",
+        "GlAccountNbr"
+      ]
+    },
+    {
+      "name": "ops.ReconExceptions",
+      "file": "tables/ops.ReconExceptions.csv",
+      "rowCount": 0,
+      "sha256": "6191af985ed1fa8cae39eedc6c47f8ad09ed9b0bdd9b911f97e507153f0a1b00",
+      "keyColumns": [
+        "BusinessDate",
+        "CheckName",
+        "ItemKey",
+        "Difference"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 15,
+      "sha256": "351b07bf53b683c4f089e234f19a6ef1f501143e3021559c2c0d0a27c0270e35",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "status": "Failed",
+      "errorCode": "BATCH_STEP_FAILED",
+      "failedStep": "PL_MapAndAggregate",
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate"
+      ],
+      "pipelinesNotRun": [
+        "PL_Reconciliation"
+      ],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ]
+      ],
+      "messages": [
+        {
+          "pipeline": "PL_MapAndAggregate",
+          "stepName": "CheckTxnCodeMapping",
+          "contains": "Unmapped transaction codes: P2PD"
+        },
+        {
+          "pipeline": "PL_Master_NightlyBatch",
+          "stepName": "PL_MapAndAggregate",
+          "contains": "Unmapped transaction codes: P2PD"
+        }
+      ],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": null
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_001.csv",
+      "sha256": "69285b282f84ff88a3ab66e15e9f670975e0c1736806a6b84f98ef417790f037",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    }
+  ],
+  "schedule": null
+}

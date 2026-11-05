@@ -1,0 +1,27 @@
+{
+  "scenario": "extract-db2-types",
+  "description": "Hand-written Db2 rows covering the type rules of ADR 0005: CHAR padding (trailing and leading), VARCHAR trailing spaces, empty string vs NULL, NULL in every nullable column, DECIMAL(31,8) at full precision, DECIMAL(15,2) limits, TIMESTAMP(6) microseconds, DST-ambiguous and non-existent local times, DATE limits, BIGINT limits, quotes, pipes, backslashes, line breaks and text outside Windows-1252.",
+  "acceptanceTests": [
+    "AT-03"
+  ],
+  "seed": 20261105,
+  "inputsCommitted": true,
+  "keyBridgeMapping": null,
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_ExtractKeyStone",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

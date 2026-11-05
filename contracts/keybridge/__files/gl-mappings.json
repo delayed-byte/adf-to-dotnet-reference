@@ -1,0 +1,26 @@
+{
+  "version": "2026-11-01",
+  "mappings": [
+    { "transactionCode": "DEP1", "glAccountNumber": "1010", "side": "DEBIT", "allocationRatio": 1.0, "description": "Cash on hand - branch vault" },
+    { "transactionCode": "DEP1", "glAccountNumber": "2100", "side": "CREDIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "ACHC", "glAccountNumber": "1110", "side": "DEBIT", "allocationRatio": 1.0, "description": "Due from Federal Reserve - ACH" },
+    { "transactionCode": "ACHC", "glAccountNumber": "2100", "side": "CREDIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "WDL1", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "WDL1", "glAccountNumber": "1010", "side": "CREDIT", "allocationRatio": 1.0, "description": "Cash on hand - branch vault" },
+    { "transactionCode": "ATMW", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "ATMW", "glAccountNumber": "1020", "side": "CREDIT", "allocationRatio": 1.0, "description": "Cash - ATM network" },
+    { "transactionCode": "ACHD", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "ACHD", "glAccountNumber": "1110", "side": "CREDIT", "allocationRatio": 1.0, "description": "Due from Federal Reserve - ACH" },
+    { "transactionCode": "CPOS", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "CPOS", "glAccountNumber": "2400", "side": "CREDIT", "allocationRatio": 1.0, "description": "Card settlement payable" },
+    { "transactionCode": "CRFD", "glAccountNumber": "2400", "side": "DEBIT", "allocationRatio": 1.0, "description": "Card settlement payable" },
+    { "transactionCode": "CRFD", "glAccountNumber": "2100", "side": "CREDIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "LPMT", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "LPMT", "glAccountNumber": "1300", "side": "CREDIT", "allocationRatio": 0.85, "description": "Loans to members - principal" },
+    { "transactionCode": "LPMT", "glAccountNumber": "4100", "side": "CREDIT", "allocationRatio": 0.15, "description": "Loan interest income" },
+    { "transactionCode": "DIVP", "glAccountNumber": "5100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Dividend expense" },
+    { "transactionCode": "DIVP", "glAccountNumber": "2100", "side": "CREDIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "FEE1", "glAccountNumber": "2100", "side": "DEBIT", "allocationRatio": 1.0, "description": "Member share accounts" },
+    { "transactionCode": "FEE1", "glAccountNumber": "4300", "side": "CREDIT", "allocationRatio": 1.0, "description": "Fee income - service charges" }
+  ]
+}

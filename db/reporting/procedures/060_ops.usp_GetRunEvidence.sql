@@ -5,7 +5,9 @@
 -- Checksum: SHA-256 (hex) over the business columns of the table's rows for the business
 -- date, one pipe-delimited line per row in primary-key order, NULL written as \N, lines
 -- joined with LF and hashed as UTF-16LE (nvarchar). Load-audit columns are excluded, so an
--- identical rerun produces identical checksums.
+-- identical rerun produces identical checksums. Each line is nvarchar with an explicit collation:
+-- the free-text columns use a UTF-8 collation (migration 0007, ADR 0005) and STRING_AGG cannot
+-- resolve the mixed collations otherwise. Collation does not change nvarchar characters or the hash.
 CREATE OR ALTER PROCEDURE ops.usp_GetRunEvidence
     @BatchRunId    uniqueidentifier,
     @BusinessDate  date
@@ -57,7 +59,7 @@ BEGIN
     SELECT 'Checksums', N'core.PostedTransaction', CONVERT(nvarchar(64), HASHBYTES('SHA2_256', ISNULL(STRING_AGG(CAST(CONCAT_WS(N'|',
                TxnId, AccountNbr, TxnCode, CONVERT(nvarchar(10), PostingDate, 23), CONVERT(nvarchar(10), EffectiveDate, 23),
                CONVERT(nvarchar(27), PostedTs, 121), Amount, ISNULL(Description, N'\N'), Channel,
-               ISNULL(CardProcessorRef, N'\N'), ISNULL(CONVERT(nvarchar(20), ReversalOfTxnId), N'\N')) AS nvarchar(max)), @lf)
+               ISNULL(CardProcessorRef, N'\N'), ISNULL(CONVERT(nvarchar(20), ReversalOfTxnId), N'\N')) AS nvarchar(max)) COLLATE Latin1_General_100_BIN2, @lf)
                WITHIN GROUP (ORDER BY TxnId), N'')), 2)
     FROM core.PostedTransaction WHERE PostingDate = @BusinessDate;
 
@@ -65,27 +67,27 @@ BEGIN
     SELECT 'Checksums', N'core.Account', CONVERT(nvarchar(64), HASHBYTES('SHA2_256', ISNULL(STRING_AGG(CAST(CONCAT_WS(N'|',
                AccountNbr, MemberNbr, AccountCategory, ProductCode, ISNULL(Description, N'\N'), CONVERT(nvarchar(10), OpenDate, 23),
                ISNULL(CONVERT(nvarchar(10), CloseDate, 23), N'\N'), CurrentBalance, ISNULL(CONVERT(nvarchar(20), AvailableBalance), N'\N'),
-               InterestRate, AccruedInterest, Status, CONVERT(nvarchar(10), LastActivityDate, 23), CONVERT(nvarchar(27), LastMaintTs, 121)) AS nvarchar(max)), @lf)
+               InterestRate, AccruedInterest, Status, CONVERT(nvarchar(10), LastActivityDate, 23), CONVERT(nvarchar(27), LastMaintTs, 121)) AS nvarchar(max)) COLLATE Latin1_General_100_BIN2, @lf)
                WITHIN GROUP (ORDER BY AccountNbr), N'')), 2)
     FROM core.Account WHERE LastActivityDate = @BusinessDate;
 
     INSERT INTO @evidence (Section, ItemName, ItemValue)
     SELECT 'Checksums', N'core.GlEntry', CONVERT(nvarchar(64), HASHBYTES('SHA2_256', ISNULL(STRING_AGG(CAST(CONCAT_WS(N'|',
                GlEntryId, GlAccountNbr, CONVERT(nvarchar(10), PostingDate, 23), DebitAmount, CreditAmount, SourceCode,
-               ISNULL(BatchRef, N'\N'), ISNULL(Memo, N'\N'), CONVERT(nvarchar(27), CreatedTs, 121)) AS nvarchar(max)), @lf)
+               ISNULL(BatchRef, N'\N'), ISNULL(Memo, N'\N'), CONVERT(nvarchar(27), CreatedTs, 121)) AS nvarchar(max)) COLLATE Latin1_General_100_BIN2, @lf)
                WITHIN GROUP (ORDER BY GlEntryId), N'')), 2)
     FROM core.GlEntry WHERE PostingDate = @BusinessDate;
 
     INSERT INTO @evidence (Section, ItemName, ItemValue)
     SELECT 'Checksums', N'core.CardSettlement', CONVERT(nvarchar(64), HASHBYTES('SHA2_256', ISNULL(STRING_AGG(CAST(CONCAT_WS(N'|',
                ProcessorRefNbr, CONVERT(nvarchar(10), SettlementDate, 23), CONVERT(nvarchar(10), TxnDate, 23), CardBin, CardLast4,
-               Amount, TxnType, ISNULL(MerchantName, N'\N'), ISNULL(Mcc, N'\N'), CurrencyCode, SourceFile) AS nvarchar(max)), @lf)
+               Amount, TxnType, ISNULL(MerchantName, N'\N'), ISNULL(CONVERT(nvarchar(4), Mcc), N'\N'), CurrencyCode, SourceFile) AS nvarchar(max)) COLLATE Latin1_General_100_BIN2, @lf)
                WITHIN GROUP (ORDER BY ProcessorRefNbr), N'')), 2)
     FROM core.CardSettlement WHERE SettlementDate = @BusinessDate;
 
     INSERT INTO @evidence (Section, ItemName, ItemValue)
     SELECT 'Checksums', N'core.DailyGlTotals', CONVERT(nvarchar(64), HASHBYTES('SHA2_256', ISNULL(STRING_AGG(CAST(CONCAT_WS(N'|',
-               CONVERT(nvarchar(10), BusinessDate, 23), GlAccountNbr, DebitTotal, CreditTotal, NetAmount, TxnCount) AS nvarchar(max)), @lf)
+               CONVERT(nvarchar(10), BusinessDate, 23), GlAccountNbr, DebitTotal, CreditTotal, NetAmount, TxnCount) AS nvarchar(max)) COLLATE Latin1_General_100_BIN2, @lf)
                WITHIN GROUP (ORDER BY GlAccountNbr), N'')), 2)
     FROM core.DailyGlTotals WHERE BusinessDate = @BusinessDate;
 

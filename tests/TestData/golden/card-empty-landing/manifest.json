@@ -1,0 +1,62 @@
+{
+  "scenario": "card-empty-landing",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 0,
+      "sha256": "e43a75d025fd93f2ce9326370dc36917f9c8970b2e3edad1f3cf10f46ec3f76b",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 0,
+      "sha256": "c57d6fe7a56519afc8a7780ebaf2f95ce557c57b1e593cb1285f80fe11b896ba",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 3,
+      "sha256": "4b7116e1bacbd16abe92c1e97396d30c206cd1f155581f67e43e405d87130b3e",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_IngestCardSettlement",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_IngestCardSettlement"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [],
+      "messages": [],
+      "keyBridgeRequests": 0,
+      "alerts": [],
+      "evidence": null
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-landing",
+      "name": "2026-11-03/settlement_001.csv",
+      "sha256": "f1f65bb077a2f4c4655faa265bee7d166d82735de227b9d28cc43c1e62fec979",
+      "metadata": {},
+      "goldenFile": null
+    }
+  ],
+  "schedule": null
+}

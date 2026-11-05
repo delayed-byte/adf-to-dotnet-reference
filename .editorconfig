@@ -15,3 +15,7 @@ end_of_line = lf
 [tests/**.cs]
 # Underscored, sentence-style test names are intentional.
 dotnet_diagnostic.CA1707.severity = none
+
+[tests/TestData/generator/**.cs]
+# Canonical-value helpers and column types are named after the SQL types they describe (Char, Decimal, Int).
+dotnet_diagnostic.CA1720.severity = none

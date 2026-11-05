@@ -1,0 +1,16 @@
+Run,BusinessDate,PipelineName,StepName,Status,ObjectName,RecordCount,ErrorCode,Notes
+1,2026-11-04,PL_Master_NightlyBatch,\N,Started,\N,\N,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,\N,Started,\N,\N,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsPostedTxn,203,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsAccount,60,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsGlEntry,20,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.Account,60,\N,staged=60; inserted=60; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.PostedTransaction,203,\N,staged=203; inserted=203; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.GlEntry,20,\N,staged=20; inserted=20; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,\N,Succeeded,\N,3,\N,Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).
+1,2026-11-04,PL_IngestCardSettlement,\N,Started,\N,\N,\N,\N
+1,2026-11-04,PL_IngestCardSettlement,MergeCardSettlement,Succeeded,core.CardSettlement,67,\N,staged=67; inserted=67; updated=0; unchanged=0
+1,2026-11-04,PL_IngestCardSettlement,\N,Succeeded,\N,1,\N,1 settlement file(s) processed; see ops.CardFileLog.
+1,2026-11-04,PL_MapAndAggregate,\N,Started,\N,\N,\N,\N
+1,2026-11-04,PL_MapAndAggregate,CheckTxnCodeMapping,Failed,\N,1,TXN_CODE_UNMAPPED,\N
+1,2026-11-04,PL_Master_NightlyBatch,PL_MapAndAggregate,Failed,\N,\N,TXN_CODE_UNMAPPED,\N

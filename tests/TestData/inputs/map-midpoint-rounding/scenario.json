@@ -1,0 +1,27 @@
+{
+  "scenario": "map-midpoint-rounding",
+  "description": "Loan payments whose GL allocations (75% principal, 25% interest) land exactly on half a cent, e.g. 0.50 x 0.25 = 0.125. Banker's rounding gives 0.12; rounding half away from zero would give 0.13. Includes 4.70 x 0.25 = 1.175, which rounds differently in binary floating point (ADR 0006).",
+  "acceptanceTests": [
+    "AT-10"
+  ],
+  "seed": 20261109,
+  "inputsCommitted": true,
+  "keyBridgeMapping": "keybridge/gl-mappings.json",
+  "db2Tables": [
+    "db2/KS.TXN_CODE.csv",
+    "db2/KS.MEMBER.csv",
+    "db2/KS.ACCOUNT.csv",
+    "db2/KS.POSTED_TXN.csv",
+    "db2/KS.GL_ENTRY.csv"
+  ],
+  "blobs": [],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "triggerTimeUtc": null,
+      "tolerance": "0.00"
+    }
+  ]
+}

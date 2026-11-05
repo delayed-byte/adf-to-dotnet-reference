@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Seeded synthetic data generator and golden-output oracle (Phase 2, ADR 0006).
+    Library used by the test harness and the self-tests; also a console app that regenerates
+    tests/TestData/inputs and tests/TestData/golden:  ./build.ps1 golden
+    No database, Azure or test-framework dependencies: it only produces files.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CreditUnion.Batch.TestData</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

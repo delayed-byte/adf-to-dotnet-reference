@@ -1,0 +1,139 @@
+{
+  "scenario": "map-midpoint-rounding",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 13,
+      "sha256": "9c0b30cb7f2a5284055f3232c9216cb28ec135dd3ec147238e16fedcf4485d59",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 2,
+      "sha256": "cebcb00fe2566b7905ce7918ed0fec7ba8124c983b3a3bab1b87e860cc3c3beb",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 8,
+      "sha256": "ece890c7cc817f16df20e2eacf2c874d7c2c450d756069a81bc22d8e8cf80dfc",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 0,
+      "sha256": "e43a75d025fd93f2ce9326370dc36917f9c8970b2e3edad1f3cf10f46ec3f76b",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 0,
+      "sha256": "c57d6fe7a56519afc8a7780ebaf2f95ce557c57b1e593cb1285f80fe11b896ba",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ref.TxnCodeGlMap",
+      "file": "tables/ref.TxnCodeGlMap.csv",
+      "rowCount": 21,
+      "sha256": "632f81231bcf3f6a045fcf474e36b797ee6e3ed819249d11befe6a06b237a447",
+      "keyColumns": [
+        "TxnCode",
+        "GlAccountNbr",
+        "DrCr"
+      ]
+    },
+    {
+      "name": "core.DailyGlTotals",
+      "file": "tables/core.DailyGlTotals.csv",
+      "rowCount": 4,
+      "sha256": "8d55d03c516d308f02ba5248ab49c43531c8c065f1d731f89ded62b086bff34e",
+      "keyColumns": [
+        "BusinessDate",
+        "GlAccountNbr"
+      ]
+    },
+    {
+      "name": "ops.ReconExceptions",
+      "file": "tables/ops.ReconExceptions.csv",
+      "rowCount": 0,
+      "sha256": "6191af985ed1fa8cae39eedc6c47f8ad09ed9b0bdd9b911f97e507153f0a1b00",
+      "keyColumns": [
+        "BusinessDate",
+        "CheckName",
+        "ItemKey",
+        "Difference"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 17,
+      "sha256": "af4b692c29239354f35bd7221575ea7f5d6b3f34b3f474fcf528ab0264e7302b",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-1.json"
+    }
+  ],
+  "blobs": [
+    {
+      "container": "evidence",
+      "name": "2026-11-04/batch-run-{run:1}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-1.json"
+    }
+  ],
+  "schedule": null
+}

@@ -1,0 +1,9 @@
+{
+  "type": "ReconciliationException",
+  "businessDate": "2026-11-04",
+  "batchRunId": "{run:1}",
+  "cardDifference": 0.01,
+  "glItemsOutOfTolerance": 0,
+  "exceptionCount": 1,
+  "summary": "CardSettlement ALL difference 0.01"
+}

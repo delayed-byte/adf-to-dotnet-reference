@@ -1,0 +1,9 @@
+Run,BusinessDate,PipelineName,StepName,Status,ObjectName,RecordCount,ErrorCode,Notes
+1,2026-11-04,PL_ExtractKeyStone,\N,Started,\N,\N,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsPostedTxn,5,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsAccount,6,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,CopyToStaging,Succeeded,stg.KsGlEntry,3,\N,\N
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.Account,6,\N,staged=6; inserted=6; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.PostedTransaction,5,\N,staged=5; inserted=5; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,MergeKeyStone,Succeeded,core.GlEntry,3,\N,staged=3; inserted=3; updated=0; unchanged=0
+1,2026-11-04,PL_ExtractKeyStone,\N,Succeeded,\N,3,\N,Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).

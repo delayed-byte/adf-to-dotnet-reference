@@ -1,0 +1,241 @@
+{
+  "scenario": "rerun-earlier-date",
+  "generatorVersion": 1,
+  "tables": [
+    {
+      "name": "core.PostedTransaction",
+      "file": "tables/core.PostedTransaction.csv",
+      "rowCount": 300,
+      "sha256": "30dc66153b65da7b8c30bf550707654cca9891d3decf3e36d63304aaae511167",
+      "keyColumns": [
+        "TxnId"
+      ]
+    },
+    {
+      "name": "core.Account",
+      "file": "tables/core.Account.csv",
+      "rowCount": 78,
+      "sha256": "b9ee2d4e4026e0141624406c47d211a780459e1f159d75341ae3937aac320fa0",
+      "keyColumns": [
+        "AccountNbr"
+      ]
+    },
+    {
+      "name": "core.GlEntry",
+      "file": "tables/core.GlEntry.csv",
+      "rowCount": 30,
+      "sha256": "d35aae87a196c135f1ddc6c094d7422b260dd8483a4501c2a5e29365fe08e71e",
+      "keyColumns": [
+        "GlEntryId"
+      ]
+    },
+    {
+      "name": "core.CardSettlement",
+      "file": "tables/core.CardSettlement.csv",
+      "rowCount": 118,
+      "sha256": "67df394d99a0a737847d62e640539dec4cc657ed2cf67b20b75f1cacea79452b",
+      "keyColumns": [
+        "ProcessorRefNbr"
+      ]
+    },
+    {
+      "name": "ops.CardFileLog",
+      "file": "tables/ops.CardFileLog.csv",
+      "rowCount": 2,
+      "sha256": "45e665488cbe3fc9a49932f7eb7a089dbd79cd480cb5339c9349bad3c38514b6",
+      "keyColumns": [
+        "Run",
+        "BusinessDate",
+        "SourceFile"
+      ]
+    },
+    {
+      "name": "ref.TxnCodeGlMap",
+      "file": "tables/ref.TxnCodeGlMap.csv",
+      "rowCount": 21,
+      "sha256": "6594962706fcc31ec174243fc32d23b052539233f9798e4f7fbba774334d7515",
+      "keyColumns": [
+        "TxnCode",
+        "GlAccountNbr",
+        "DrCr"
+      ]
+    },
+    {
+      "name": "core.DailyGlTotals",
+      "file": "tables/core.DailyGlTotals.csv",
+      "rowCount": 18,
+      "sha256": "843cba7d69ef7456778d3ccc6c92b8e4a0dcc6ee29ca173b41fb6b150bfa08c0",
+      "keyColumns": [
+        "BusinessDate",
+        "GlAccountNbr"
+      ]
+    },
+    {
+      "name": "ops.ReconExceptions",
+      "file": "tables/ops.ReconExceptions.csv",
+      "rowCount": 0,
+      "sha256": "6191af985ed1fa8cae39eedc6c47f8ad09ed9b0bdd9b911f97e507153f0a1b00",
+      "keyColumns": [
+        "BusinessDate",
+        "CheckName",
+        "ItemKey",
+        "Difference"
+      ]
+    },
+    {
+      "name": "ops.BatchRun",
+      "file": "tables/ops.BatchRun.csv",
+      "rowCount": 51,
+      "sha256": "570dc1b69ffabf1e11156b8446b4a2f42b3653a0892fe57b8fb344ab35093500",
+      "keyColumns": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-03",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-1.json"
+    },
+    {
+      "run": 2,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-04",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-2.json"
+    },
+    {
+      "run": 3,
+      "pipeline": "PL_Master_NightlyBatch",
+      "businessDate": "2026-11-03",
+      "status": "Succeeded",
+      "errorCode": null,
+      "failedStep": null,
+      "pipelinesRun": [
+        "PL_Master_NightlyBatch",
+        "PL_ExtractKeyStone",
+        "PL_IngestCardSettlement",
+        "PL_MapAndAggregate",
+        "PL_Reconciliation"
+      ],
+      "pipelinesNotRun": [],
+      "stages": [
+        [
+          "PL_ExtractKeyStone",
+          "PL_IngestCardSettlement"
+        ],
+        [
+          "PL_MapAndAggregate"
+        ],
+        [
+          "PL_Reconciliation"
+        ]
+      ],
+      "messages": [],
+      "keyBridgeRequests": 1,
+      "alerts": [],
+      "evidence": "evidence/run-3.json"
+    }
+  ],
+  "blobs": [
+    {
+      "container": "card-archive",
+      "name": "2026-11-03/settlement_001.csv",
+      "sha256": "760ef58c49edfacc0b43500d1741421ae707310185cb7b26117d5f380ea054b4",
+      "metadata": {
+        "batch_run_id": "{run:1}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "card-archive",
+      "name": "2026-11-04/settlement_001.csv",
+      "sha256": "dc72abc9c30e25e8a410f16d16c3730535c790e1a3c00ab0112cb9ad114b4b4d",
+      "metadata": {
+        "batch_run_id": "{run:2}",
+        "retain_until": "TBD"
+      },
+      "goldenFile": null
+    },
+    {
+      "container": "evidence",
+      "name": "2026-11-03/batch-run-{run:1}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-1.json"
+    },
+    {
+      "container": "evidence",
+      "name": "2026-11-03/batch-run-{run:3}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-3.json"
+    },
+    {
+      "container": "evidence",
+      "name": "2026-11-04/batch-run-{run:2}.json",
+      "sha256": null,
+      "metadata": {
+        "retain_until": "TBD"
+      },
+      "goldenFile": "evidence/run-2.json"
+    }
+  ],
+  "schedule": null
+}

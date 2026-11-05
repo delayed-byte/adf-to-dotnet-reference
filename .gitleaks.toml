@@ -1,0 +1,14 @@
+# gitleaks configuration for ./build.ps1 scan (detect --no-git over the working tree).
+# Default rules apply everywhere except git-ignored local artefacts: .env holds the container
+# passwords that ./build.ps1 up generates per machine (never committed), and build output and
+# regenerated test inputs are not source.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Git-ignored local files"
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)(bin|obj)/''',
+  '''(^|/)tests/TestData/generated/''',
+]

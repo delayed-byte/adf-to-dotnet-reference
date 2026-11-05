@@ -8,6 +8,8 @@
     <ProjectReference Include="..\..\src\CreditUnion.Batch.Core\CreditUnion.Batch.Core.csproj" />
     <ProjectReference Include="..\..\src\CreditUnion.Batch.KeyStone\CreditUnion.Batch.KeyStone.csproj" />
     <ProjectReference Include="..\..\tools\CreditUnion.Batch.DbDeploy\CreditUnion.Batch.DbDeploy.csproj" />
+    <ProjectReference Include="..\TestData\generator\CreditUnion.Batch.TestData.csproj" />
+    <ProjectReference Include="..\CreditUnion.Batch.TestHarness\CreditUnion.Batch.TestHarness.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
