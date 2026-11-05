@@ -1,0 +1,32 @@
+{
+  "name": "TR_Nightly_0300_Pacific",
+  "properties": {
+    "description": "Runs the nightly batch at 03:00 Pacific Time every day. 03:00 is outside the 01:00-02:59 window affected by daylight saving changes, so it occurs exactly once per calendar day. businessDate is the previous Pacific calendar day.",
+    "annotations": [],
+    "runtimeState": "Started",
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "PL_Master_NightlyBatch",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "businessDate": "@formatDateTime(addDays(convertFromUtc(trigger().scheduledTime, 'Pacific Standard Time'), -1), 'yyyy-MM-dd')"
+        }
+      }
+    ],
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "startTime": "2026-01-01T03:00:00",
+        "timeZone": "Pacific Standard Time",
+        "schedule": {
+          "hours": [ 3 ],
+          "minutes": [ 0 ]
+        }
+      }
+    }
+  }
+}

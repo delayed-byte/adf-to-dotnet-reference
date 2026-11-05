@@ -1,0 +1,687 @@
+{
+  "name": "PL_IngestCardSettlement",
+  "properties": {
+    "description": "Loads the card processor's settlement files for the business date. Lists card-landing/{businessDate}/settlement_*.csv; for each file (parallel, batch count 4) lands it raw, validates header, row schema and trailer in SQL, then either promotes and archives it or writes an error manifest and quarantines it. Finally merges into core.CardSettlement on the processor reference number.",
+    "activities": [
+      {
+        "name": "Log Card Ingest Started",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Started", "type": "String" },
+            "StartedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Reset Card Staging",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Log Card Ingest Started", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[stg].[usp_ResetCardSettlementStaging]",
+          "storedProcedureParameters": {
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "List Landing Files",
+        "type": "GetMetadata",
+        "dependsOn": [
+          { "activity": "Reset Card Staging", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "DS_Blob_Folder",
+            "type": "DatasetReference",
+            "parameters": {
+              "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+              "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }
+            }
+          },
+          "fieldList": [ "exists", "childItems" ],
+          "storeSettings": {
+            "type": "AzureBlobStorageReadSettings",
+            "recursive": false,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {
+            "type": "BinaryReadSettings"
+          }
+        }
+      },
+      {
+        "name": "Filter Settlement Files",
+        "type": "Filter",
+        "dependsOn": [
+          { "activity": "List Landing Files", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@coalesce(activity('List Landing Files').output?.childItems, json('[]'))",
+            "type": "Expression"
+          },
+          "condition": {
+            "value": "@and(equals(item().type, 'File'), and(startsWith(item().name, 'settlement_'), endsWith(item().name, '.csv')))",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "For Each Settlement File",
+        "type": "ForEach",
+        "dependsOn": [
+          { "activity": "Filter Settlement Files", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('Filter Settlement Files').output.Value",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 4,
+          "activities": [
+            {
+              "name": "Copy File To Raw Staging",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:30:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "source": {
+                  "type": "DelimitedTextSource",
+                  "additionalColumns": [
+                    { "name": "BusinessDate", "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" } },
+                    { "name": "SourceFile", "value": { "value": "@item().name", "type": "Expression" } }
+                  ],
+                  "storeSettings": {
+                    "type": "AzureBlobStorageReadSettings",
+                    "recursive": false,
+                    "enablePartitionDiscovery": false
+                  },
+                  "formatSettings": {
+                    "type": "DelimitedTextReadSettings"
+                  }
+                },
+                "sink": {
+                  "type": "AzureSqlSink",
+                  "preCopyScript": {
+                    "value": "@concat('DELETE FROM stg.CardSettlementRaw WHERE BusinessDate = ''', pipeline().parameters.businessDate, ''' AND SourceFile = N''', replace(item().name, '''', ''''''), '''')",
+                    "type": "Expression"
+                  },
+                  "writeBatchSize": 10000,
+                  "writeBehavior": "insert",
+                  "tableOption": "none",
+                  "disableMetricsCollection": false
+                },
+                "enableStaging": false,
+                "translator": {
+                  "type": "TabularTranslator",
+                  "mappings": [
+                    { "source": { "name": "BusinessDate" }, "sink": { "name": "BusinessDate" } },
+                    { "source": { "name": "SourceFile" }, "sink": { "name": "SourceFile" } },
+                    { "source": { "ordinal": 1 }, "sink": { "name": "RecordType" } },
+                    { "source": { "ordinal": 2 }, "sink": { "name": "Field01" } },
+                    { "source": { "ordinal": 3 }, "sink": { "name": "Field02" } },
+                    { "source": { "ordinal": 4 }, "sink": { "name": "Field03" } },
+                    { "source": { "ordinal": 5 }, "sink": { "name": "Field04" } },
+                    { "source": { "ordinal": 6 }, "sink": { "name": "Field05" } },
+                    { "source": { "ordinal": 7 }, "sink": { "name": "Field06" } },
+                    { "source": { "ordinal": 8 }, "sink": { "name": "Field07" } },
+                    { "source": { "ordinal": 9 }, "sink": { "name": "Field08" } },
+                    { "source": { "ordinal": 10 }, "sink": { "name": "Field09" } }
+                  ],
+                  "typeConversion": false
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "DS_Blob_CardSettlementCsv",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+                    "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                    "fileName": { "value": "@item().name", "type": "Expression" }
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "DS_Reporting_SqlTable",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schemaName": "stg",
+                    "tableName": "CardSettlementRaw"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Validate Settlement File",
+              "type": "Lookup",
+              "dependsOn": [
+                { "activity": "Copy File To Raw Staging", "dependencyConditions": [ "Succeeded" ] }
+              ],
+              "policy": {
+                "timeout": "0.00:10:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "sqlReaderStoredProcedureName": "[stg].[usp_ValidateCardSettlementFile]",
+                  "storedProcedureParameters": {
+                    "BusinessDate": { "type": "String", "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" } },
+                    "SourceFile": { "type": "String", "value": { "value": "@item().name", "type": "Expression" } },
+                    "BatchRunId": { "type": "Guid", "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" } }
+                  },
+                  "queryTimeout": "00:10:00",
+                  "partitionOption": "None"
+                },
+                "dataset": {
+                  "referenceName": "DS_Reporting_SqlTable",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schemaName": "stg",
+                    "tableName": "CardSettlementRaw"
+                  }
+                },
+                "firstRowOnly": true
+              }
+            },
+            {
+              "name": "If File Valid",
+              "type": "IfCondition",
+              "dependsOn": [
+                { "activity": "Validate Settlement File", "dependencyConditions": [ "Succeeded" ] }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@equals(activity('Validate Settlement File').output.firstRow.IsValid, true)",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
+                  {
+                    "name": "Promote Valid File",
+                    "type": "SqlServerStoredProcedure",
+                    "dependsOn": [],
+                    "policy": {
+                      "timeout": "0.00:10:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "storedProcedureName": "[stg].[usp_PromoteCardSettlementFile]",
+                      "storedProcedureParameters": {
+                        "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+                        "SourceFile": { "value": { "value": "@item().name", "type": "Expression" }, "type": "String" }
+                      }
+                    },
+                    "linkedServiceName": {
+                      "referenceName": "LS_Reporting_Sql",
+                      "type": "LinkedServiceReference"
+                    }
+                  },
+                  {
+                    "name": "Archive Settlement File",
+                    "type": "Copy",
+                    "dependsOn": [
+                      { "activity": "Promote Valid File", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:10:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "source": {
+                        "type": "BinarySource",
+                        "storeSettings": {
+                          "type": "AzureBlobStorageReadSettings",
+                          "recursive": false
+                        },
+                        "formatSettings": {
+                          "type": "BinaryReadSettings"
+                        }
+                      },
+                      "sink": {
+                        "type": "BinarySink",
+                        "storeSettings": {
+                          "type": "AzureBlobStorageWriteSettings",
+                          "metadata": [
+                            { "name": "retain_until", "value": { "value": "@pipeline().parameters.retainUntil", "type": "Expression" } },
+                            { "name": "batch_run_id", "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" } }
+                          ]
+                        }
+                      },
+                      "enableStaging": false
+                    },
+                    "inputs": [
+                      {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      }
+                    ],
+                    "outputs": [
+                      {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.archiveContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Delete Archived Landing File",
+                    "type": "Delete",
+                    "dependsOn": [
+                      { "activity": "Archive Settlement File", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:05:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "dataset": {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      },
+                      "enableLogging": false,
+                      "storeSettings": {
+                        "type": "AzureBlobStorageReadSettings",
+                        "recursive": false,
+                        "enablePartitionDiscovery": false
+                      }
+                    }
+                  },
+                  {
+                    "name": "Log File Archived",
+                    "type": "SqlServerStoredProcedure",
+                    "dependsOn": [
+                      { "activity": "Delete Archived Landing File", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:05:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "storedProcedureName": "[ops].[usp_LogCardFile]",
+                      "storedProcedureParameters": {
+                        "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+                        "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+                        "SourceFile": { "value": { "value": "@item().name", "type": "Expression" }, "type": "String" },
+                        "Outcome": { "value": "Archived", "type": "String" },
+                        "DetailRowCount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.DetailRowCount", "type": "Expression" }, "type": "Int32" },
+                        "TrailerRowCount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.TrailerRowCount", "type": "Expression" }, "type": "Int32" },
+                        "DetailTotalAmount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.DetailTotalAmount", "type": "Expression" }, "type": "Decimal" },
+                        "TrailerTotalAmount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.TrailerTotalAmount", "type": "Expression" }, "type": "Decimal" },
+                        "DestinationPath": { "value": { "value": "@concat(pipeline().parameters.archiveContainer, '/', pipeline().parameters.businessDate, '/', item().name)", "type": "Expression" }, "type": "String" }
+                      }
+                    },
+                    "linkedServiceName": {
+                      "referenceName": "LS_Reporting_Sql",
+                      "type": "LinkedServiceReference"
+                    }
+                  }
+                ],
+                "ifFalseActivities": [
+                  {
+                    "name": "Write Error Manifest",
+                    "type": "Copy",
+                    "dependsOn": [],
+                    "policy": {
+                      "timeout": "0.00:10:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderStoredProcedureName": "[stg].[usp_GetCardSettlementValidationErrors]",
+                        "storedProcedureParameters": {
+                          "BusinessDate": { "type": "String", "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" } },
+                          "SourceFile": { "type": "String", "value": { "value": "@item().name", "type": "Expression" } }
+                        },
+                        "queryTimeout": "00:10:00",
+                        "partitionOption": "None"
+                      },
+                      "sink": {
+                        "type": "JsonSink",
+                        "storeSettings": {
+                          "type": "AzureBlobStorageWriteSettings"
+                        },
+                        "formatSettings": {
+                          "type": "JsonWriteSettings",
+                          "filePattern": "arrayOfObjects"
+                        }
+                      },
+                      "enableStaging": false
+                    },
+                    "inputs": [
+                      {
+                        "referenceName": "DS_Reporting_SqlTable",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "schemaName": "stg",
+                          "tableName": "CardSettlementValidationError"
+                        }
+                      }
+                    ],
+                    "outputs": [
+                      {
+                        "referenceName": "DS_Blob_JsonFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.quarantineContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@concat(item().name, '.errors.json')", "type": "Expression" }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Quarantine Settlement File",
+                    "type": "Copy",
+                    "dependsOn": [
+                      { "activity": "Write Error Manifest", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:10:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "source": {
+                        "type": "BinarySource",
+                        "storeSettings": {
+                          "type": "AzureBlobStorageReadSettings",
+                          "recursive": false
+                        },
+                        "formatSettings": {
+                          "type": "BinaryReadSettings"
+                        }
+                      },
+                      "sink": {
+                        "type": "BinarySink",
+                        "storeSettings": {
+                          "type": "AzureBlobStorageWriteSettings",
+                          "metadata": [
+                            { "name": "retain_until", "value": { "value": "@pipeline().parameters.retainUntil", "type": "Expression" } },
+                            { "name": "batch_run_id", "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" } }
+                          ]
+                        }
+                      },
+                      "enableStaging": false
+                    },
+                    "inputs": [
+                      {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      }
+                    ],
+                    "outputs": [
+                      {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.quarantineContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Delete Quarantined Landing File",
+                    "type": "Delete",
+                    "dependsOn": [
+                      { "activity": "Quarantine Settlement File", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:05:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "dataset": {
+                        "referenceName": "DS_Blob_BinaryFile",
+                        "type": "DatasetReference",
+                        "parameters": {
+                          "container": { "value": "@pipeline().parameters.landingContainer", "type": "Expression" },
+                          "folderPath": { "value": "@pipeline().parameters.businessDate", "type": "Expression" },
+                          "fileName": { "value": "@item().name", "type": "Expression" }
+                        }
+                      },
+                      "enableLogging": false,
+                      "storeSettings": {
+                        "type": "AzureBlobStorageReadSettings",
+                        "recursive": false,
+                        "enablePartitionDiscovery": false
+                      }
+                    }
+                  },
+                  {
+                    "name": "Log File Quarantined",
+                    "type": "SqlServerStoredProcedure",
+                    "dependsOn": [
+                      { "activity": "Delete Quarantined Landing File", "dependencyConditions": [ "Succeeded" ] }
+                    ],
+                    "policy": {
+                      "timeout": "0.00:05:00",
+                      "retry": 2,
+                      "retryIntervalInSeconds": 30,
+                      "secureOutput": false,
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "storedProcedureName": "[ops].[usp_LogCardFile]",
+                      "storedProcedureParameters": {
+                        "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+                        "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+                        "SourceFile": { "value": { "value": "@item().name", "type": "Expression" }, "type": "String" },
+                        "Outcome": { "value": "Quarantined", "type": "String" },
+                        "DetailRowCount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.DetailRowCount", "type": "Expression" }, "type": "Int32" },
+                        "TrailerRowCount": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.TrailerRowCount", "type": "Expression" }, "type": "Int32" },
+                        "ErrorSummary": { "value": { "value": "@activity('Validate Settlement File').output.firstRow.ErrorSummary", "type": "Expression" }, "type": "String" },
+                        "DestinationPath": { "value": { "value": "@concat(pipeline().parameters.quarantineContainer, '/', pipeline().parameters.businessDate, '/', item().name)", "type": "Expression" }, "type": "String" }
+                      }
+                    },
+                    "linkedServiceName": {
+                      "referenceName": "LS_Reporting_Sql",
+                      "type": "LinkedServiceReference"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Merge Card Settlement To Core",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "For Each Settlement File", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[core].[usp_MergeCardSettlement]",
+          "storedProcedureParameters": {
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Log Card Ingest Succeeded",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Merge Card Settlement To Core", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Succeeded", "type": "String" },
+            "RecordCount": { "value": { "value": "@activity('Filter Settlement Files').output.FilteredItemsCount", "type": "Expression" }, "type": "Int64" },
+            "Notes": {
+              "value": {
+                "value": "@if(equals(activity('Filter Settlement Files').output.FilteredItemsCount, 0), 'No settlement files found in the landing folder.', concat(string(activity('Filter Settlement Files').output.FilteredItemsCount), ' settlement file(s) processed; see ops.CardFileLog.'))",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "businessDate": {
+        "type": "string"
+      },
+      "batchRunId": {
+        "type": "string"
+      },
+      "landingContainer": {
+        "type": "string",
+        "defaultValue": "card-landing"
+      },
+      "archiveContainer": {
+        "type": "string",
+        "defaultValue": "card-archive"
+      },
+      "quarantineContainer": {
+        "type": "string",
+        "defaultValue": "card-quarantine"
+      },
+      "retainUntil": {
+        "type": "string",
+        "defaultValue": "TBD"
+      }
+    },
+    "folder": {
+      "name": "NightlyBatch"
+    },
+    "annotations": [ "source:CardProcessor" ]
+  }
+}

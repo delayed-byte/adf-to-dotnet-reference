@@ -1,0 +1,126 @@
+{
+  "name": "DF_MapAndAggregateGl",
+  "properties": {
+    "description": "Joins the business date's transactions to the cached GL mapping, derives each allocated amount as round(Amount * AllocationRatio, 2) with ROUND_HALF_EVEN (banker's rounding; rounding option 7), splits it into debit or credit by the mapping side, and aggregates per GL account into core.DailyGlTotals (NetAmount = DebitTotal - CreditTotal). The pre-SQL delete makes reruns replace the date's totals.",
+    "type": "MappingDataFlow",
+    "typeProperties": {
+      "sources": [
+        {
+          "dataset": {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference"
+          },
+          "name": "Transactions",
+          "description": "Transactions posted on the business date (core.PostedTransaction)."
+        },
+        {
+          "dataset": {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference"
+          },
+          "name": "GlMap",
+          "description": "Transaction-code-to-GL mapping cached from KeyBridge (ref.TxnCodeGlMap)."
+        }
+      ],
+      "sinks": [
+        {
+          "dataset": {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference"
+          },
+          "name": "DailyGlTotals",
+          "description": "core.DailyGlTotals, replaced for the business date."
+        }
+      ],
+      "transformations": [
+        {
+          "name": "JoinGlMap",
+          "description": "Inner join on TxnCode. Unmapped codes cannot reach here: the pipeline fails with TXN_CODE_UNMAPPED first."
+        },
+        {
+          "name": "DeriveAllocatedAmounts",
+          "description": "AllocatedAmount = round(Amount * AllocationRatio, 2, ROUND_HALF_EVEN). round() returns a double, so the result is converted straight back to decimal(15,2)."
+        },
+        {
+          "name": "SplitBySide",
+          "description": "DebitAmount or CreditAmount from the mapping side (DrCr); the other side is 0.00."
+        },
+        {
+          "name": "AggregateByGlAccount",
+          "description": "Sum debits and credits per GL account; count distinct transactions."
+        },
+        {
+          "name": "DeriveTotals",
+          "description": "Adds BusinessDate and NetAmount = DebitTotal - CreditTotal."
+        }
+      ],
+      "scriptLines": [
+        "parameters{",
+        "     businessDate as string",
+        "}",
+        "source(output(",
+        "          TxnId as long,",
+        "          TxnCode as string,",
+        "          PostingDate as date,",
+        "          Amount as decimal(15,2)",
+        "     ),",
+        "     allowSchemaDrift: false,",
+        "     validateSchema: false,",
+        "     isolationLevel: 'READ_COMMITTED',",
+        "     query: (concat('SELECT TxnId, TxnCode, PostingDate, Amount FROM core.PostedTransaction WHERE PostingDate = \\'', $businessDate, '\\'')),",
+        "     format: 'query') ~> Transactions",
+        "source(output(",
+        "          TxnCode as string,",
+        "          GlAccountNbr as string,",
+        "          DrCr as string,",
+        "          AllocationRatio as decimal(9,6)",
+        "     ),",
+        "     allowSchemaDrift: false,",
+        "     validateSchema: false,",
+        "     isolationLevel: 'READ_COMMITTED',",
+        "     format: 'table') ~> GlMap",
+        "Transactions, GlMap join(Transactions@TxnCode == GlMap@TxnCode,",
+        "     joinType:'inner',",
+        "     matchType:'exact',",
+        "     ignoreSpaces: false,",
+        "     broadcast: 'right')~> JoinGlMap",
+        "JoinGlMap derive(AllocatedAmount = toDecimal(round(Amount * AllocationRatio, 2, 7), 15, 2)) ~> DeriveAllocatedAmounts",
+        "DeriveAllocatedAmounts derive(DebitAmount = iif(DrCr == 'D', AllocatedAmount, toDecimal(0, 15, 2)),",
+        "          CreditAmount = iif(DrCr == 'C', AllocatedAmount, toDecimal(0, 15, 2))) ~> SplitBySide",
+        "SplitBySide aggregate(groupBy(GlAccountNbr),",
+        "     DebitTotal = toDecimal(sum(DebitAmount), 19, 2),",
+        "          CreditTotal = toDecimal(sum(CreditAmount), 19, 2),",
+        "          TxnCount = toInteger(countDistinct(TxnId))) ~> AggregateByGlAccount",
+        "AggregateByGlAccount derive(BusinessDate = toDate($businessDate, 'yyyy-MM-dd'),",
+        "          NetAmount = toDecimal(DebitTotal - CreditTotal, 19, 2)) ~> DeriveTotals",
+        "DeriveTotals sink(allowSchemaDrift: false,",
+        "     validateSchema: false,",
+        "     input(",
+        "          BusinessDate as date,",
+        "          GlAccountNbr as string,",
+        "          DebitTotal as decimal(19,2),",
+        "          CreditTotal as decimal(19,2),",
+        "          NetAmount as decimal(19,2),",
+        "          TxnCount as integer",
+        "     ),",
+        "     deletable:false,",
+        "     insertable:true,",
+        "     updateable:false,",
+        "     upsertable:false,",
+        "     format: 'table',",
+        "     preSQLs:[(concat('DELETE FROM core.DailyGlTotals WHERE BusinessDate = \\'', $businessDate, '\\''))],",
+        "     skipDuplicateMapInputs: true,",
+        "     skipDuplicateMapOutputs: true,",
+        "     errorHandlingOption: 'stopOnFirstError',",
+        "     mapColumn(",
+        "          BusinessDate,",
+        "          GlAccountNbr,",
+        "          DebitTotal,",
+        "          CreditTotal,",
+        "          NetAmount,",
+        "          TxnCount",
+        "     )) ~> DailyGlTotals"
+      ]
+    }
+  }
+}

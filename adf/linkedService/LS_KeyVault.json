@@ -1,0 +1,11 @@
+{
+  "name": "LS_KeyVault",
+  "properties": {
+    "type": "AzureKeyVault",
+    "description": "Holds every credential used by the factory. Locally replaced by user-secrets and environment variables.",
+    "annotations": [],
+    "typeProperties": {
+      "baseUrl": "https://kv-cu-batch-prod.vault.azure.net/"
+    }
+  }
+}

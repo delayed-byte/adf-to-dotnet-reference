@@ -1,0 +1,296 @@
+{
+  "name": "PL_MapAndAggregate",
+  "properties": {
+    "description": "Refreshes the transaction-code-to-GL mapping from KeyBridge into ref.TxnCodeGlMap, fails with TXN_CODE_UNMAPPED if any code posted on the business date has no mapping, otherwise runs DF_MapAndAggregateGl to build core.DailyGlTotals.",
+    "activities": [
+      {
+        "name": "Log Map Started",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Started", "type": "String" },
+            "StartedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Get GL Mapping From KeyBridge",
+        "type": "WebActivity",
+        "dependsOn": [
+          { "activity": "Log Map Started", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 3,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "method": "GET",
+          "url": {
+            "value": "@concat(pipeline().parameters.keyBridgeBaseUrl, '/v1/reference/transaction-codes/gl-mappings')",
+            "type": "Expression"
+          },
+          "headers": {
+            "Accept": "application/json",
+            "X-Correlation-Id": {
+              "value": "@pipeline().parameters.batchRunId",
+              "type": "Expression"
+            }
+          },
+          "authentication": {
+            "type": "Basic",
+            "username": "cu-batch",
+            "password": {
+              "type": "AzureKeyVaultSecret",
+              "store": {
+                "referenceName": "LS_KeyVault",
+                "type": "LinkedServiceReference"
+              },
+              "secretName": "keybridge-api-password"
+            }
+          },
+          "httpRequestTimeout": "00:01:00",
+          "connectVia": {
+            "referenceName": "IR_SelfHosted_KeyStone",
+            "type": "IntegrationRuntimeReference"
+          }
+        }
+      },
+      {
+        "name": "Cache GL Mapping",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Get GL Mapping From KeyBridge", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ref].[usp_UpsertTxnCodeGlMap]",
+          "storedProcedureParameters": {
+            "MappingJson": { "value": { "value": "@string(activity('Get GL Mapping From KeyBridge').output.mappings)", "type": "Expression" }, "type": "String" },
+            "SourceVersion": { "value": { "value": "@activity('Get GL Mapping From KeyBridge').output.version", "type": "Expression" }, "type": "String" },
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Lookup Unmapped Txn Codes",
+        "type": "Lookup",
+        "dependsOn": [
+          { "activity": "Cache GL Mapping", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderStoredProcedureName": "[ref].[usp_GetUnmappedTxnCodes]",
+            "storedProcedureParameters": {
+              "BusinessDate": { "type": "String", "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" } }
+            },
+            "queryTimeout": "00:05:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference",
+            "parameters": {
+              "schemaName": "ref",
+              "tableName": "TxnCodeGlMap"
+            }
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "If Any Txn Code Unmapped",
+        "type": "IfCondition",
+        "dependsOn": [
+          { "activity": "Lookup Unmapped Txn Codes", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(activity('Lookup Unmapped Txn Codes').output.firstRow.UnmappedCount, 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Log Unmapped Txn Codes",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+                "storedProcedureParameters": {
+                  "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+                  "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+                  "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+                  "Status": { "value": "Failed", "type": "String" },
+                  "StepName": { "value": "CheckTxnCodeMapping", "type": "String" },
+                  "RecordCount": { "value": { "value": "@activity('Lookup Unmapped Txn Codes').output.firstRow.UnmappedCount", "type": "Expression" }, "type": "Int64" },
+                  "ErrorCode": { "value": "TXN_CODE_UNMAPPED", "type": "String" },
+                  "ErrorMessage": { "value": { "value": "@concat('Unmapped transaction codes: ', activity('Lookup Unmapped Txn Codes').output.firstRow.UnmappedCodes)", "type": "Expression" }, "type": "String" }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "LS_Reporting_Sql",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Fail Txn Code Unmapped",
+              "type": "Fail",
+              "dependsOn": [
+                { "activity": "Log Unmapped Txn Codes", "dependencyConditions": [ "Completed" ] }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "message": {
+                  "value": "@concat('Unmapped transaction codes: ', activity('Lookup Unmapped Txn Codes').output.firstRow.UnmappedCodes)",
+                  "type": "Expression"
+                },
+                "errorCode": "TXN_CODE_UNMAPPED"
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "Aggregate Daily GL Totals",
+              "type": "ExecuteDataFlow",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.02:00:00",
+                "retry": 1,
+                "retryIntervalInSeconds": 60,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "dataflow": {
+                  "referenceName": "DF_MapAndAggregateGl",
+                  "type": "DataFlowReference",
+                  "parameters": {
+                    "businessDate": {
+                      "value": "'@{pipeline().parameters.businessDate}'",
+                      "type": "Expression"
+                    }
+                  },
+                  "datasetParameters": {
+                    "Transactions": {
+                      "schemaName": "core",
+                      "tableName": "PostedTransaction"
+                    },
+                    "GlMap": {
+                      "schemaName": "ref",
+                      "tableName": "TxnCodeGlMap"
+                    },
+                    "DailyGlTotals": {
+                      "schemaName": "core",
+                      "tableName": "DailyGlTotals"
+                    }
+                  }
+                },
+                "compute": {
+                  "coreCount": 8,
+                  "computeType": "General"
+                },
+                "traceLevel": "Fine"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Log Map Succeeded",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "If Any Txn Code Unmapped", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Succeeded", "type": "String" },
+            "ObjectName": { "value": "core.DailyGlTotals", "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "businessDate": {
+        "type": "string"
+      },
+      "batchRunId": {
+        "type": "string"
+      },
+      "keyBridgeBaseUrl": {
+        "type": "string",
+        "defaultValue": "https://keybridge.cu.internal/api"
+      }
+    },
+    "folder": {
+      "name": "NightlyBatch"
+    },
+    "annotations": [ "source:KeyBridge" ]
+  }
+}

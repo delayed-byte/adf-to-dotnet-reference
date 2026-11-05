@@ -1,0 +1,12 @@
+{
+  "name": "LS_Blob_Storage",
+  "properties": {
+    "type": "AzureBlobStorage",
+    "description": "Partner file landing, archive, quarantine and evidence containers. Factory managed identity.",
+    "annotations": [],
+    "typeProperties": {
+      "serviceEndpoint": "https://stcubatchprod.blob.core.windows.net/",
+      "accountKind": "StorageV2"
+    }
+  }
+}

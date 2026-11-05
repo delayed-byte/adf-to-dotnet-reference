@@ -1,0 +1,14 @@
+{
+  "name": "DS_KeyStone_Db2",
+  "properties": {
+    "description": "Query-based Db2 dataset; the copy activity supplies the query from ops.ExtractConfig.",
+    "linkedServiceName": {
+      "referenceName": "LS_KeyStone_Db2",
+      "type": "LinkedServiceReference"
+    },
+    "annotations": [],
+    "type": "Db2Table",
+    "schema": [],
+    "typeProperties": {}
+  }
+}

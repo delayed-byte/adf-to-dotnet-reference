@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CreditUnion.Batch.Core\CreditUnion.Batch.Core.csproj" />
     <ProjectReference Include="..\..\src\CreditUnion.Batch.KeyStone\CreditUnion.Batch.KeyStone.csproj" />
+    <ProjectReference Include="..\..\tools\CreditUnion.Batch.DbDeploy\CreditUnion.Batch.DbDeploy.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

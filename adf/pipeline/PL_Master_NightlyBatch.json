@@ -1,0 +1,464 @@
+{
+  "name": "PL_Master_NightlyBatch",
+  "properties": {
+    "description": "Nightly batch for a business date. Runs Extract and Card Settlement in parallel, then Map and Aggregate, then Reconciliation, passing businessDate and batchRunId (the master pipeline run ID). Exports the run evidence file. On any child failure, records a Failed event naming the failing step in ops.BatchRun and stops. businessDate defaults to the previous Pacific calendar day and can be overridden for reruns.",
+    "activities": [
+      {
+        "name": "Resolve Business Date",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "resolvedBusinessDate",
+          "value": {
+            "value": "@if(empty(pipeline().parameters.businessDate), formatDateTime(addDays(convertFromUtc(pipeline().TriggerTime, 'Pacific Standard Time'), -1), 'yyyy-MM-dd'), pipeline().parameters.businessDate)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Log Batch Started",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Resolve Business Date", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Started", "type": "String" },
+            "Notes": { "value": { "value": "@concat('trigger=', pipeline().TriggerName, '; triggerTimeUtc=', string(pipeline().TriggerTime))", "type": "Expression" }, "type": "String" },
+            "StartedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Execute Extract KeyStone",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Log Batch Started", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "PL_ExtractKeyStone",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "businessDate": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" },
+            "batchRunId": { "value": "@pipeline().RunId", "type": "Expression" }
+          }
+        }
+      },
+      {
+        "name": "Execute Ingest Card Settlement",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Log Batch Started", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "PL_IngestCardSettlement",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "businessDate": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" },
+            "batchRunId": { "value": "@pipeline().RunId", "type": "Expression" }
+          }
+        }
+      },
+      {
+        "name": "Execute Map And Aggregate",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Execute Extract KeyStone", "dependencyConditions": [ "Succeeded" ] },
+          { "activity": "Execute Ingest Card Settlement", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "PL_MapAndAggregate",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "businessDate": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" },
+            "batchRunId": { "value": "@pipeline().RunId", "type": "Expression" }
+          }
+        }
+      },
+      {
+        "name": "Execute Reconciliation",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          { "activity": "Execute Map And Aggregate", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "PL_Reconciliation",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "businessDate": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" },
+            "batchRunId": { "value": "@pipeline().RunId", "type": "Expression" },
+            "tolerance": { "value": "@pipeline().parameters.reconTolerance", "type": "Expression" }
+          }
+        }
+      },
+      {
+        "name": "Export Run Evidence",
+        "type": "Copy",
+        "dependsOn": [
+          { "activity": "Execute Reconciliation", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderStoredProcedureName": "[ops].[usp_GetRunEvidence]",
+            "storedProcedureParameters": {
+              "BatchRunId": { "type": "Guid", "value": { "value": "@pipeline().RunId", "type": "Expression" } },
+              "BusinessDate": { "type": "String", "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" } }
+            },
+            "queryTimeout": "00:10:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "JsonSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "metadata": [
+                { "name": "retain_until", "value": { "value": "@pipeline().parameters.retainUntil", "type": "Expression" } }
+              ]
+            },
+            "formatSettings": {
+              "type": "JsonWriteSettings",
+              "filePattern": "arrayOfObjects"
+            }
+          },
+          "enableStaging": false
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference",
+            "parameters": {
+              "schemaName": "ops",
+              "tableName": "BatchRun"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_Blob_JsonFile",
+            "type": "DatasetReference",
+            "parameters": {
+              "container": "evidence",
+              "folderPath": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" },
+              "fileName": { "value": "@concat('batch-run-', pipeline().RunId, '.json')", "type": "Expression" }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Log Batch Succeeded",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Export Run Evidence", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Succeeded", "type": "String" },
+            "ObjectName": { "value": { "value": "@concat('evidence/', variables('resolvedBusinessDate'), '/batch-run-', pipeline().RunId, '.json')", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Log Failed At Extract",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Execute Extract KeyStone", "dependencyConditions": [ "Failed" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Failed", "type": "String" },
+            "StepName": { "value": "PL_ExtractKeyStone", "type": "String" },
+            "ErrorCode": { "value": { "value": "@activity('Execute Extract KeyStone').error.errorCode", "type": "Expression" }, "type": "String" },
+            "ErrorMessage": { "value": { "value": "@activity('Execute Extract KeyStone').error.message", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Fail At Extract",
+        "type": "Fail",
+        "dependsOn": [
+          { "activity": "Log Failed At Extract", "dependencyConditions": [ "Completed" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "message": { "value": "@concat('PL_ExtractKeyStone failed: ', activity('Execute Extract KeyStone').error.message)", "type": "Expression" },
+          "errorCode": "BATCH_STEP_FAILED"
+        }
+      },
+      {
+        "name": "Log Failed At Card Settlement",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Execute Ingest Card Settlement", "dependencyConditions": [ "Failed" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Failed", "type": "String" },
+            "StepName": { "value": "PL_IngestCardSettlement", "type": "String" },
+            "ErrorCode": { "value": { "value": "@activity('Execute Ingest Card Settlement').error.errorCode", "type": "Expression" }, "type": "String" },
+            "ErrorMessage": { "value": { "value": "@activity('Execute Ingest Card Settlement').error.message", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Fail At Card Settlement",
+        "type": "Fail",
+        "dependsOn": [
+          { "activity": "Log Failed At Card Settlement", "dependencyConditions": [ "Completed" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "message": { "value": "@concat('PL_IngestCardSettlement failed: ', activity('Execute Ingest Card Settlement').error.message)", "type": "Expression" },
+          "errorCode": "BATCH_STEP_FAILED"
+        }
+      },
+      {
+        "name": "Log Failed At Map",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Execute Map And Aggregate", "dependencyConditions": [ "Failed" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Failed", "type": "String" },
+            "StepName": { "value": "PL_MapAndAggregate", "type": "String" },
+            "ErrorCode": { "value": { "value": "@activity('Execute Map And Aggregate').error.errorCode", "type": "Expression" }, "type": "String" },
+            "ErrorMessage": { "value": { "value": "@activity('Execute Map And Aggregate').error.message", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Fail At Map",
+        "type": "Fail",
+        "dependsOn": [
+          { "activity": "Log Failed At Map", "dependencyConditions": [ "Completed" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "message": { "value": "@concat('PL_MapAndAggregate failed: ', activity('Execute Map And Aggregate').error.message)", "type": "Expression" },
+          "errorCode": "BATCH_STEP_FAILED"
+        }
+      },
+      {
+        "name": "Log Failed At Reconciliation",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Execute Reconciliation", "dependencyConditions": [ "Failed" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Failed", "type": "String" },
+            "StepName": { "value": "PL_Reconciliation", "type": "String" },
+            "ErrorCode": { "value": { "value": "@activity('Execute Reconciliation').error.errorCode", "type": "Expression" }, "type": "String" },
+            "ErrorMessage": { "value": { "value": "@activity('Execute Reconciliation').error.message", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Fail At Reconciliation",
+        "type": "Fail",
+        "dependsOn": [
+          { "activity": "Log Failed At Reconciliation", "dependencyConditions": [ "Completed" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "message": { "value": "@concat('PL_Reconciliation failed: ', activity('Execute Reconciliation').error.message)", "type": "Expression" },
+          "errorCode": "BATCH_STEP_FAILED"
+        }
+      },
+      {
+        "name": "Log Failed At Evidence",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Export Run Evidence", "dependencyConditions": [ "Failed" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@variables('resolvedBusinessDate')", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Failed", "type": "String" },
+            "StepName": { "value": "ExportRunEvidence", "type": "String" },
+            "ErrorCode": { "value": { "value": "@activity('Export Run Evidence').error.errorCode", "type": "Expression" }, "type": "String" },
+            "ErrorMessage": { "value": { "value": "@activity('Export Run Evidence').error.message", "type": "Expression" }, "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Fail At Evidence",
+        "type": "Fail",
+        "dependsOn": [
+          { "activity": "Log Failed At Evidence", "dependencyConditions": [ "Completed" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "message": { "value": "@concat('Run evidence export failed: ', activity('Export Run Evidence').error.message)", "type": "Expression" },
+          "errorCode": "BATCH_STEP_FAILED"
+        }
+      }
+    ],
+    "parameters": {
+      "businessDate": {
+        "type": "string",
+        "defaultValue": ""
+      },
+      "reconTolerance": {
+        "type": "string",
+        "defaultValue": "0.00"
+      },
+      "retainUntil": {
+        "type": "string",
+        "defaultValue": "TBD"
+      }
+    },
+    "variables": {
+      "resolvedBusinessDate": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "NightlyBatch"
+    },
+    "annotations": [ "entry-point" ]
+  }
+}

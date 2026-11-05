@@ -8,6 +8,7 @@ Reference implementation of an Azure Data Factory → .NET C# migration for a cr
 | Command | Purpose |
 | --- | --- |
 | `./build.ps1 up` | Start Db2, SQL Server, Azurite, WireMock, Aspire dashboard (generates `.env`) |
+| `./build.ps1 seed` | Deploy the Db2 (`db/keystone-db2`) and SQL Server (`db/reporting`) schemas with DbUp; rerunnable |
 | `./build.ps1 build` | `dotnet build` with warnings as errors |
 | `./build.ps1 test` | Run all tests (`dotnet test --solution AdfToDotnet.sln`) |
 | `./build.ps1 run` | Start the Functions host (`func start`) |
@@ -17,7 +18,8 @@ Reference implementation of an Azure Data Factory → .NET C# migration for a cr
 
 - Acceptance tests for a pipeline are written and failing **before** its implementation. A phase is done only when `dotnet test` passes with zero skipped acceptance tests.
 - Ambiguity → write a short ADR in `docs/decisions/` (`NNNN-title.md`); do not guess silently.
-- `ADF JSON in adf/` is the source of truth for behavior (retry policies, batch counts, timeouts).
+- `ADF JSON in adf/` is the source of truth for behavior (retry policies, batch counts, timeouts). Keep `AdfDefinitionValidationTests` green when editing it; conventions are in ADR 0004.
+- Database changes: add a new numbered script to `db/*/migrations` (never edit an applied one); procedures in `db/reporting/procedures` are `CREATE OR ALTER` and rerun on every deploy. Db2 scripts: one statement per `;`, no compound statements (ADR 0002).
 - `CreditUnion.Batch.Core` has no Azure Functions dependency. Orchestrators contain no I/O, `DateTime.UtcNow` or random values; use `context.CurrentUtcDateTime` and injected `TimeProvider`.
 - Money is `decimal`, never `double`; state the `MidpointRounding` explicitly.
 - Timestamps in UTC; `businessDate` is a `DateOnly` in `America/Los_Angeles`.

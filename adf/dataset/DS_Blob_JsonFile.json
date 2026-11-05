@@ -1,0 +1,42 @@
+{
+  "name": "DS_Blob_JsonFile",
+  "properties": {
+    "description": "A JSON document in blob storage (error manifests, run evidence).",
+    "linkedServiceName": {
+      "referenceName": "LS_Blob_Storage",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "container": {
+        "type": "string"
+      },
+      "folderPath": {
+        "type": "string"
+      },
+      "fileName": {
+        "type": "string"
+      }
+    },
+    "annotations": [],
+    "type": "Json",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobStorageLocation",
+        "container": {
+          "value": "@dataset().container",
+          "type": "Expression"
+        },
+        "folderPath": {
+          "value": "@dataset().folderPath",
+          "type": "Expression"
+        },
+        "fileName": {
+          "value": "@dataset().fileName",
+          "type": "Expression"
+        }
+      },
+      "encodingName": "UTF-8"
+    },
+    "schema": {}
+  }
+}

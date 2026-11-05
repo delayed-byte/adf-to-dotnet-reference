@@ -1,0 +1,244 @@
+{
+  "name": "PL_ExtractKeyStone",
+  "properties": {
+    "description": "Copies the business date's rows for each table in ops.ExtractConfig from KeyStone Db2 into SQL staging (parallel, batch count 3), then upserts staging into core on source keys and records row counts in ops.BatchRun.",
+    "activities": [
+      {
+        "name": "Log Extract Started",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Started", "type": "String" },
+            "StartedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Lookup Extract Config",
+        "type": "Lookup",
+        "dependsOn": [
+          { "activity": "Log Extract Started", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT SourceName, SourceSchema, SourceTable, SourceColumns, KeyColumns, DateColumn, TargetSchema, TargetTable FROM ops.ExtractConfig WHERE IsEnabled = 1 ORDER BY SortOrder",
+            "queryTimeout": "00:05:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "DS_Reporting_SqlTable",
+            "type": "DatasetReference",
+            "parameters": {
+              "schemaName": "ops",
+              "tableName": "ExtractConfig"
+            }
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "For Each Source Table",
+        "type": "ForEach",
+        "dependsOn": [
+          { "activity": "Lookup Extract Config", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('Lookup Extract Config').output.value",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 3,
+          "activities": [
+            {
+              "name": "Copy Db2 To Staging",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 3,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "source": {
+                  "type": "Db2Source",
+                  "query": {
+                    "value": "@concat('SELECT ', item().SourceColumns, ' FROM ', item().SourceSchema, '.', item().SourceTable, ' WHERE ', item().DateColumn, ' = DATE(''', pipeline().parameters.businessDate, ''')')",
+                    "type": "Expression"
+                  }
+                },
+                "sink": {
+                  "type": "AzureSqlSink",
+                  "preCopyScript": {
+                    "value": "@concat('TRUNCATE TABLE ', item().TargetSchema, '.', item().TargetTable)",
+                    "type": "Expression"
+                  },
+                  "writeBatchSize": 10000,
+                  "writeBehavior": "insert",
+                  "sqlWriterUseTableLock": true,
+                  "tableOption": "none",
+                  "disableMetricsCollection": false
+                },
+                "enableStaging": false,
+                "translator": {
+                  "type": "TabularTranslator",
+                  "typeConversion": true,
+                  "typeConversionSettings": {
+                    "allowDataTruncation": false,
+                    "treatBooleanAsNumber": false
+                  }
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "DS_KeyStone_Db2",
+                  "type": "DatasetReference"
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "DS_Reporting_SqlTable",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "schemaName": { "value": "@item().TargetSchema", "type": "Expression" },
+                    "tableName": { "value": "@item().TargetTable", "type": "Expression" }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Log Staging Row Count",
+              "type": "SqlServerStoredProcedure",
+              "dependsOn": [
+                { "activity": "Copy Db2 To Staging", "dependencyConditions": [ "Succeeded" ] }
+              ],
+              "policy": {
+                "timeout": "0.00:05:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+                "storedProcedureParameters": {
+                  "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+                  "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+                  "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+                  "Status": { "value": "Succeeded", "type": "String" },
+                  "StepName": { "value": "CopyToStaging", "type": "String" },
+                  "ObjectName": { "value": { "value": "@concat(item().TargetSchema, '.', item().TargetTable)", "type": "Expression" }, "type": "String" },
+                  "RecordCount": { "value": { "value": "@activity('Copy Db2 To Staging').output.rowsCopied", "type": "Expression" }, "type": "Int64" }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "LS_Reporting_Sql",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Merge KeyStone To Core",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "For Each Source Table", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:30:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[core].[usp_MergeKeyStone]",
+          "storedProcedureParameters": {
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Log Extract Succeeded",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          { "activity": "Merge KeyStone To Core", "dependencyConditions": [ "Succeeded" ] }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "[ops].[usp_LogBatchRunEvent]",
+          "storedProcedureParameters": {
+            "BatchRunId": { "value": { "value": "@pipeline().parameters.batchRunId", "type": "Expression" }, "type": "Guid" },
+            "BusinessDate": { "value": { "value": "@pipeline().parameters.businessDate", "type": "Expression" }, "type": "String" },
+            "PipelineName": { "value": { "value": "@pipeline().Pipeline", "type": "Expression" }, "type": "String" },
+            "Status": { "value": "Succeeded", "type": "String" },
+            "RecordCount": { "value": { "value": "@length(activity('Lookup Extract Config').output.value)", "type": "Expression" }, "type": "Int64" },
+            "Notes": { "value": "Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).", "type": "String" },
+            "EndedUtc": { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "Datetime" }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_Reporting_Sql",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "businessDate": {
+        "type": "string"
+      },
+      "batchRunId": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "NightlyBatch"
+    },
+    "annotations": [ "source:KeyStone" ]
+  }
+}

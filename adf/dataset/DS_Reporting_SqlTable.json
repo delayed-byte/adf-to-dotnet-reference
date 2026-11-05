@@ -1,0 +1,33 @@
+{
+  "name": "DS_Reporting_SqlTable",
+  "properties": {
+    "description": "Parameterised table in the reporting store; also the dataset for query and stored-procedure lookups.",
+    "linkedServiceName": {
+      "referenceName": "LS_Reporting_Sql",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "schemaName": {
+        "type": "string",
+        "defaultValue": "ops"
+      },
+      "tableName": {
+        "type": "string",
+        "defaultValue": "BatchRun"
+      }
+    },
+    "annotations": [],
+    "type": "AzureSqlTable",
+    "schema": [],
+    "typeProperties": {
+      "schema": {
+        "value": "@dataset().schemaName",
+        "type": "Expression"
+      },
+      "table": {
+        "value": "@dataset().tableName",
+        "type": "Expression"
+      }
+    }
+  }
+}

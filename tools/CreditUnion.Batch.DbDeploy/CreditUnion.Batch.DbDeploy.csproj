@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CreditUnion.Batch.DbDeploy</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dbup-core" />
+    <PackageReference Include="dbup-sqlserver" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Net.IBM.Data.Db2" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CreditUnion.Batch.UnitTests" />
+  </ItemGroup>
+</Project>

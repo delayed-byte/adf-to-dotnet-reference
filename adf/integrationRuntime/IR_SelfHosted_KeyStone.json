@@ -1,0 +1,7 @@
+{
+  "name": "IR_SelfHosted_KeyStone",
+  "properties": {
+    "type": "SelfHosted",
+    "description": "Self-hosted integration runtime inside the credit union network, used to reach the KeyStone Db2 reporting copy and the KeyBridge API. Not needed after migration: the .NET worker connects directly."
+  }
+}

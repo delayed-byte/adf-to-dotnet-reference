@@ -1,0 +1,27 @@
+{
+  "name": "LS_KeyStone_Db2",
+  "properties": {
+    "type": "Db2",
+    "description": "KeyStone Db2 reporting copy, read through the self-hosted IR with the read-only KSEXTRACT login over TLS.",
+    "annotations": [],
+    "typeProperties": {
+      "server": "keystone-db2-rpt.cu.internal:50001",
+      "database": "KEYSTONE",
+      "authenticationType": "Basic",
+      "username": "ksextract",
+      "password": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "LS_KeyVault",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "keystone-db2-extract-password"
+      },
+      "certificateCommonName": "keystone-db2-rpt.cu.internal"
+    },
+    "connectVia": {
+      "referenceName": "IR_SelfHosted_KeyStone",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}
