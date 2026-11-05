@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,csproj,props}]
+indent_size = 2
+
+[*.sql]
+end_of_line = lf
+
+[tests/**.cs]
+# Underscored, sentence-style test names are intentional.
+dotnet_diagnostic.CA1707.severity = none

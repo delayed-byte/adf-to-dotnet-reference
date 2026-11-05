@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CreditUnion.Batch.Core</RootNamespace>
+  </PropertyGroup>
+</Project>

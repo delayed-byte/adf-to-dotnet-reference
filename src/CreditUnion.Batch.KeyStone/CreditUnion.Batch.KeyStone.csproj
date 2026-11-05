@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CreditUnion.Batch.KeyStone</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CreditUnion.Batch.Core\CreditUnion.Batch.Core.csproj" />
+  </ItemGroup>
+</Project>

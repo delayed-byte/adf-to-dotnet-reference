@@ -1,0 +1,16 @@
+* text=auto
+
+# Anything mounted into Linux containers, or run there, must keep LF endings.
+*.sql text eol=lf
+*.sh text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+docker-compose*.yml text eol=lf
+contracts/** text eol=lf
+db/** text eol=lf
+
+*.ps1 text eol=crlf
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
