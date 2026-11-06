@@ -1,4 +1,8 @@
 using CreditUnion.Batch.Core.Configuration;
+using CreditUnion.Batch.Core.Extract;
+using CreditUnion.Batch.KeyStone;
+using CreditUnion.Batch.KeyStone.Reporting;
+using CreditUnion.Batch.KeyStone.Staging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -17,12 +21,21 @@ public static class BatchServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        // The Db2 driver's own connection retry must be off before the first Db2 connection (ADR 0009).
+        Db2DriverConfiguration.DisableClientReroute(configuration[$"{KeyStoneDb2Options.SectionName}:{nameof(KeyStoneDb2Options.ConnectionString)}"]);
+
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<KeyStoneDb2Options>().Bind(configuration.GetSection(KeyStoneDb2Options.SectionName));
         services.AddOptions<ReportingSqlOptions>().Bind(configuration.GetSection(ReportingSqlOptions.SectionName));
         services.AddOptions<BlobStorageOptions>().Bind(configuration.GetSection(BlobStorageOptions.SectionName));
         services.AddOptions<KeyBridgeOptions>().Bind(configuration.GetSection(KeyBridgeOptions.SectionName));
         services.AddOptions<ReconAlertWebhookOptions>().Bind(configuration.GetSection(ReconAlertWebhookOptions.SectionName));
+
+        // PL_ExtractKeyStone: policies are the ADF values; the services hold the work, the activities only call them.
+        services.TryAddSingleton(ExtractActivityPolicies.Adf);
+        services.TryAddSingleton<IExtractReportingStore, SqlExtractReportingStore>();
+        services.TryAddSingleton<IKeyStoneStagingCopier, Db2StagingCopier>();
+        services.TryAddSingleton<ExtractKeyStoneSteps>();
         return services;
     }
 }

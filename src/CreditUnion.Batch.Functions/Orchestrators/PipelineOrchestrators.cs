@@ -1,4 +1,7 @@
+using CreditUnion.Batch.Core.Concurrency;
+using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Pipelines;
+using CreditUnion.Batch.Functions.Activities;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
 
@@ -9,12 +12,56 @@ namespace CreditUnion.Batch.Functions.Orchestrators;
 // tests (AT-01 to AT-19) are written against these names and inputs. Each body is replaced by the
 // conversion in the build phase named in its exception.
 
-/// <summary>PL_ExtractKeyStone: input <see cref="PipelineRunInput"/>.</summary>
+/// <summary>
+/// PL_ExtractKeyStone: input <see cref="PipelineRunInput"/>. Mirrors the ADF activities in order: log
+/// Started, look up ops.ExtractConfig, copy each table Db2 to staging (at most three at once, ADF
+/// <c>batchCount</c>) and log its staging row count, merge staging into core, log Succeeded.
+/// The orchestrator does no I/O; every step is an activity whose retries are the ADF activity policy.
+/// </summary>
 public static class ExtractKeyStoneOrchestrator
 {
+    private static readonly ExtractActivityPolicies Policies = ExtractActivityPolicies.Adf;
+
     [Function(PipelineNames.Extract)]
-    public static Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context) =>
-        throw new NotImplementedException($"{PipelineNames.Extract} is not converted yet (docs/PRD.md, Phase 4).");
+    public static async Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var input = context.GetInput<PipelineRunInput>() ?? throw new InvalidOperationException($"{PipelineNames.Extract} needs a PipelineRunInput.");
+        var logOptions = AdfRetry.Options(Policies.LogEvent);
+
+        // Log Extract Started
+        await context.CallActivityAsync(ExtractActivityNames.LogEvent,
+            Event(input, "Started") with { StartedUtc = context.CurrentUtcDateTime }, logOptions);
+
+        // Lookup Extract Config
+        var tables = await context.CallActivityAsync<IReadOnlyList<ExtractTableConfig>>(
+            ExtractActivityNames.LookupConfig, input, AdfRetry.Options(Policies.LookupConfig));
+
+        // For Each Source Table (batchCount 3): Copy Db2 To Staging, then Log Staging Row Count
+        var copyOptions = AdfRetry.Options(Policies.CopyToStaging);
+        await BoundedParallel.ForEachAsync(tables, ExtractActivityPolicies.BatchCount, async table =>
+        {
+            var rowsCopied = await context.CallActivityAsync<long>(
+                ExtractActivityNames.CopyToStaging, new CopyTableRequest(table, input.BusinessDate), copyOptions);
+            await context.CallActivityAsync(ExtractActivityNames.LogEvent,
+                Event(input, "Succeeded") with { StepName = "CopyToStaging", ObjectName = table.TargetName, RecordCount = rowsCopied }, logOptions);
+        });
+
+        // Merge KeyStone To Core
+        await context.CallActivityAsync(ExtractActivityNames.Merge, input, AdfRetry.Options(Policies.Merge));
+
+        // Log Extract Succeeded
+        await context.CallActivityAsync(ExtractActivityNames.LogEvent,
+            Event(input, "Succeeded") with
+            {
+                RecordCount = tables.Count,
+                Notes = "Tables extracted (see CopyToStaging and MergeKeyStone events for row counts).",
+                EndedUtc = context.CurrentUtcDateTime,
+            }, logOptions);
+    }
+
+    private static LogBatchRunEventRequest Event(PipelineRunInput input, string status) =>
+        new(input.BatchRunId, input.BusinessDate, PipelineNames.Extract, status);
 }
 
 /// <summary>PL_IngestCardSettlement: input <see cref="PipelineRunInput"/>.</summary>

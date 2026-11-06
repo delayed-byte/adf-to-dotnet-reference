@@ -1,0 +1,28 @@
+using CreditUnion.Batch.Core.Extract;
+using Microsoft.DurableTask;
+
+namespace CreditUnion.Batch.Functions.Orchestrators;
+
+/// <summary>Turns an ADF activity policy into the Durable options of the call that implements the activity (ADR 0008).</summary>
+public static class AdfRetry
+{
+    /// <summary>
+    /// <c>retry + 1</c> attempts, a fixed interval (backoff coefficient 1). Failures that retrying cannot
+    /// fix are not retried: <see cref="ExtractDataException"/> (ADR 0005) and <see cref="ExtractConfigurationException"/>.
+    /// </summary>
+    public static TaskOptions Options(ActivityPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return TaskOptions.FromRetryPolicy(new RetryPolicy(policy.MaxNumberOfAttempts, policy.RetryInterval, backoffCoefficient: 1.0, maxRetryInterval: policy.RetryInterval)
+        {
+            HandleFailure = IsRetriable,
+        });
+    }
+
+    /// <summary>Whether retrying can help: false for data and configuration errors, true for everything else (timeouts, connection failures).</summary>
+    public static bool IsRetriable(TaskFailureDetails failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        return !failure.IsCausedBy<ExtractDataException>() && !failure.IsCausedBy<ExtractConfigurationException>();
+    }
+}

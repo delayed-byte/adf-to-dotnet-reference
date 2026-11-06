@@ -165,3 +165,55 @@
 - **Timer trigger:** it must set `NightlyBatchInput.BusinessDate` and take the fire time from `TimeProvider`; `ScheduleStatus` is null in AT-18.
 - **The in-process host does not replay orchestrators.** The PRD's determinism replay test is Phase 8 work.
 - **AT-17 needs explicit handling in Phase 8:** the webhook token is in the URL path, and HTTP-client logs and spans do not redact it.
+
+## Phase 4 – Convert Extract (2026-11-05)
+
+**Implemented (`PL_ExtractKeyStone`, body of `ExtractKeyStoneOrchestrator`; ADR 0009):**
+- The orchestrator mirrors the ADF activities: log Started, look up `ops.ExtractConfig`, copy each table Db2 to staging with parallelism bounded to `batchCount` 3 and log its staging row count, `core.usp_MergeKeyStone`, log Succeeded.
+  - It does no I/O and reads the time only from `context.CurrentUtcDateTime`.
+  - Four activities (`Extract_*`) are thin `[Function]` wrappers over `ExtractKeyStoneSteps` (Core). `AddCreditUnionBatch` registers the services.
+- Each `CallActivityAsync` carries a `RetryPolicy` with `retry + 1` attempts and a fixed 30 s interval (`AdfRetry`).
+  - The values are in `ExtractActivityPolicies.Adf`; `ExtractPolicyTests` compares each one, and `batchCount`, with the ADF JSON.
+  - `ExtractDataException` and `ExtractConfigurationException` are not retried.
+  - The ADF activity timeouts are enforced per attempt in the steps.
+- Copy Db2 To Staging (`Db2StagingCopier` in `CreditUnion.Batch.KeyStone`) streams `DB2DataReader` through `Db2StagingReader` into `SqlBulkCopy`, batches of 10,000 with a table lock.
+  - No intermediate file is written.
+  - The Db2 query runs before the staging table is truncated.
+  - The reader follows ADR 0005: `GetDB2Decimal` to `SqlDecimal`, CHAR padding kept, timestamps verbatim, hour-24 timestamps, non-ASCII CHAR values and scale mismatches as data errors.
+  - Errors name the table, row number, masked key and column, never the value, and do not attach the driver's exception.
+- Connection settings: Db2 uses KSEXTRACT from `KeyStoneDb2Options`; the reporting store uses `ReportingSqlOptions`. Logs carry counts and table names only.
+
+**Driver-level retries (ADR 0009):**
+- **SqlClient:** `ConnectRetryCount` is set to 0.
+- **Db2 CLI:** it retried a refused connection by itself, up to 3 attempts per `Open` with a 5 s wait.
+  - AT-04 showed it: both refusals were absorbed with no failed attempt in the trace.
+  - There is no connection-string keyword, and `db2cli.ini` has no effect.
+  - The only switch is a `db2dsdriver.cfg` entry for the exact database, host and port with `enableACR=false`, which the driver reads once per process.
+  - `Db2DriverConfiguration` writes the file from the connection string at startup.
+  - The harness registers the fault proxy's reserved port block (`127.0.0.1:15600-15615`) before its first Db2 connection.
+  - `Db2ConnectionRetryProbeTests` pins the behaviour.
+
+**Harness changes (no acceptance test, golden file or in-process host was edited):**
+- The proxy and `BatchEnvironment` changes above.
+- The Db2 loader inserts tables of 5,000 rows or more as 500-row `INSERT … VALUES` statements with exact literals, each committing on its own. The reset deletes in 50,000-row chunks with no command timeout. The Db2 container's log overflowed on one big transaction, and the driver's 30 s default cancelled a delete chunk.
+- New tests: `ExtractDataErrorTests` (hour-24 timestamp and non-ASCII CHAR against real Db2: masked message, no retry, nothing merged, no full account number in any log or span), `ExtractPerformanceTests`, `Db2ConnectionRetryProbeTests`.
+
+**Gate:**
+- **Build:** clean, warnings as errors.
+- **AT-01 to AT-04 pass.**
+- **UnitTests: 165 pass** (67 new: query builder and masking, policies against the ADF JSON, `BoundedParallel`, value rules, steps with timeouts, the orchestrator on the in-process host with fakes, driver configuration).
+- **Full run** (`dotnet test`, no `Category=Performance`, against the `./build.ps1 up` stack): 244 tests, **228 pass, 16 fail, 0 skipped**.
+  - The 16 are AT-05 to AT-07 (Card), AT-08 to AT-13 (they now get past Extract and stop at the Card precondition), AT-14 to AT-16 and three AT-17 cases (Master), and AT-18 (trigger).
+  - Each fails with the `NotImplementedException` of a stub. Card stays not-converted until Phase 5.
+  - AT-19 and the 44 harness self-tests still pass.
+  - The run used `CU_TESTS_USE_COMPOSE=1`; the Testcontainers mode was not rerun after this phase's changes.
+- **Performance scenario** (`perf-extract-1m`, `./build.ps1 test -Performance`): **1,052,000 rows (1,000,000 transactions, 50,000 accounts, 2,000 GL entries) extracted in 46.3 s = 1,361,948 rows per minute** against the 100,000 minimum. The result matches the golden row counts and checksums. Loading those rows into Db2 took 249 s, outside the measurement. One run on a development machine.
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Notes for later phases:**
+- **Retries:** any new Db2 reader must register its endpoint with `Db2DriverConfiguration`, or the CLI retries underneath the `RetryPolicy` again.
+- **Deployment:** the Functions app needs a writable temp directory, or `DB2DSDRIVER_CFG_PATH` pointing to a file that carries the `enableACR=false` entry for the production KeyStone host and port.
+- **ForEach failure:** `BoundedParallel` starts no new iteration after one fails. ADF's behaviour is not confirmed; it makes no difference with three tables and `batchCount` 3.
+- **Phase 8:** a failed extract throws `TaskFailedException` and logs no `Failed` event, because the ADF pipeline has no failure branch. The master turns it into `BATCH_STEP_FAILED` and records the failure.
+- **Phase 5:** Card settlement can reuse `BoundedParallel`, `AdfRetry`, `ExtractKeyStoneSteps`' timeout pattern and the `Connections` helpers.
+

@@ -13,6 +13,9 @@ namespace CreditUnion.Batch.TestHarness.Db2;
 /// </summary>
 public sealed class KeyStoneDb2(string adminConnectionString, string extractConnectionString, string host, int port)
 {
+    private const int LiteralInsertThreshold = 5_000;
+    private const int LiteralBatchRows = 500;
+    private const int DeleteChunkRows = 50_000;
     private HashSet<string>? baseTxnCodes;
 
     /// <summary>Instance owner (db2inst1): deploys, resets and loads.</summary>
@@ -49,7 +52,7 @@ public sealed class KeyStoneDb2(string adminConnectionString, string extractConn
         baseTxnCodes ??= [.. (await ReadAsync(connection, KeyStoneTables.TxnCode, cancellationToken).ConfigureAwait(false)).Rows.Select(r => r[0]!)];
         foreach (var table in KeyStoneTables.LoadOrder.Reverse().Where(t => t != KeyStoneTables.TxnCode))
         {
-            await ExecuteAsync(connection, $"DELETE FROM {table.Name}", cancellationToken).ConfigureAwait(false);
+            await DeleteAllAsync(connection, table.Name, cancellationToken).ConfigureAwait(false);
         }
 
         var current = await ReadAsync(connection, KeyStoneTables.TxnCode, cancellationToken).ConfigureAwait(false);
@@ -89,6 +92,12 @@ public sealed class KeyStoneDb2(string adminConnectionString, string extractConn
             throw new InvalidOperationException($"{table.Name} input columns do not match the table definition.");
         }
 
+        if (rows.RowCount >= LiteralInsertThreshold)
+        {
+            await InsertLiteralBatchesAsync(connection, table, rows, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         using var transaction = connection.BeginTransaction();
         using var command = new DB2Command(
             $"INSERT INTO {table.Name} ({string.Join(", ", rows.Columns)}) VALUES ({string.Join(", ", rows.Columns.Select(_ => "?"))})", connection, transaction);
@@ -104,6 +113,36 @@ public sealed class KeyStoneDb2(string adminConnectionString, string extractConn
         }
 
         transaction.Commit();
+    }
+
+    /// <summary>
+    /// Large tables (the performance scenario has a million transactions) go in as multi-row INSERT
+    /// statements with exact literals, <see cref="LiteralBatchRows"/> rows each. Row-by-row parameter binding takes
+    /// minutes for a million rows; the literals are as exact as the bound parameters (Db2Values.ToLiteral).
+    /// Each statement commits by itself: one transaction of a million rows overflows the test database's log.
+    /// </summary>
+    private static async Task InsertLiteralBatchesAsync(DB2Connection connection, Db2TableDefinition table, TableData rows, CancellationToken cancellationToken)
+    {
+        var header = $"INSERT INTO {table.Name} ({string.Join(", ", rows.Columns)}) VALUES ";
+        var text = new System.Text.StringBuilder();
+        for (var start = 0; start < rows.RowCount; start += LiteralBatchRows)
+        {
+            text.Clear().Append(header);
+            var end = Math.Min(start + LiteralBatchRows, rows.RowCount);
+            for (var r = start; r < end; r++)
+            {
+                text.Append(r == start ? "(" : ", (");
+                for (var c = 0; c < table.Columns.Count; c++)
+                {
+                    text.Append(c == 0 ? string.Empty : ", ").Append(Db2Values.ToLiteral(rows.Rows[r][c], table.Columns[c].Type));
+                }
+
+                text.Append(')');
+            }
+
+            using var command = new DB2Command(text.ToString(), connection) { CommandTimeout = 0 };
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Reads a whole KeyStone table into canonical form by the ADR 0005 rules, ordered by key.</summary>
@@ -133,6 +172,18 @@ public sealed class KeyStoneDb2(string adminConnectionString, string extractConn
         }
 
         return new TableData(table.Name, [.. table.Columns.Select(c => c.Name)], rows);
+    }
+
+    /// <summary>Deletes every row in chunks that commit separately, so clearing the performance scenario's million rows fits the log.</summary>
+    private static async Task DeleteAllAsync(DB2Connection connection, string tableName, CancellationToken cancellationToken)
+    {
+        int deleted;
+        do
+        {
+            using var command = new DB2Command($"DELETE FROM (SELECT 1 FROM {tableName} FETCH FIRST {DeleteChunkRows} ROWS ONLY)", connection) { CommandTimeout = 0 };
+            deleted = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        while (deleted == DeleteChunkRows);
     }
 
     private static async Task ExecuteAsync(DB2Connection connection, string sql, CancellationToken cancellationToken)

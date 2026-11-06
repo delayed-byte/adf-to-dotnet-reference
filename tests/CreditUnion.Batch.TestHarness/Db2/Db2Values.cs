@@ -36,6 +36,33 @@ public static class Db2Values
         };
     }
 
+    /// <summary>
+    /// The canonical text value as a Db2 SQL literal, for multi-row INSERT statements (large loads). Exact like
+    /// <see cref="Bind"/>: decimals keep every digit, strings keep every space, timestamps keep six fraction digits.
+    /// </summary>
+    public static string ToLiteral(string? text, ColumnType type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        if (text is null)
+        {
+            return "NULL";
+        }
+
+        switch (type.Kind)
+        {
+            case SqlKind.Char or SqlKind.VarChar or SqlKind.NVarChar:
+                return "'" + text.Replace("'", "''", StringComparison.Ordinal) + "'";
+            case SqlKind.Decimal or SqlKind.BigInt or SqlKind.Int:
+                return text.All(c => char.IsAsciiDigit(c) || c is '-' or '.') ? text : throw new FormatException($"'{text}' is not a numeric literal.");
+            case SqlKind.Date:
+                return "DATE('" + CanonicalValue.ParseDate(text).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + "')";
+            case SqlKind.DateTime2:
+                return "TIMESTAMP('" + CanonicalValue.ParseTimestamp(text).ToString("yyyy-MM-dd-HH.mm.ss.ffffff", System.Globalization.CultureInfo.InvariantCulture) + "')";
+            default:
+                throw new NotSupportedException($"No Db2 literal rule for {type}.");
+        }
+    }
+
     /// <summary>Binds a canonical text value to a Db2 parameter with an explicit type, so nothing is inferred or rounded.</summary>
     public static void Bind(DB2Parameter parameter, string? text, ColumnType type)
     {

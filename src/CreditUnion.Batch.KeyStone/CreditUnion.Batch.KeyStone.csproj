@@ -5,4 +5,9 @@
   <ItemGroup>
     <ProjectReference Include="..\CreditUnion.Batch.Core\CreditUnion.Batch.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Net.IBM.Data.Db2" />
+  </ItemGroup>
 </Project>

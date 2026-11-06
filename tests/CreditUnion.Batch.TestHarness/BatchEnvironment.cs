@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
+using CreditUnion.Batch.KeyStone;
 using CreditUnion.Batch.TestHarness.Db2;
+using CreditUnion.Batch.TestHarness.Faults;
 using CreditUnion.Batch.TestHarness.Scenarios;
 using CreditUnion.Batch.TestHarness.Sql;
 using CreditUnion.Batch.TestHarness.Storage;
@@ -59,6 +61,10 @@ public sealed class BatchEnvironment : IAsyncDisposable
     public static async Task<BatchEnvironment> StartAsync(CancellationToken cancellationToken = default)
     {
         var clock = Stopwatch.StartNew();
+
+        // Before the first Db2 connection of the process (the driver reads its settings once): no driver-level
+        // connection retry on the ports the fault proxy uses, so AT-04 can see each refused attempt (ADR 0009).
+        Db2DriverConfiguration.DisableClientReroute(FaultInjectingTcpProxy.ReservedPorts.Select(p => new Db2Endpoint(Db2Database, FaultInjectingTcpProxy.Host, p)));
         var environment = Environment.GetEnvironmentVariable(UseComposeVariable) == "1"
             ? FromComposeStack(clock)
             : await StartContainersAsync(clock, cancellationToken).ConfigureAwait(false);

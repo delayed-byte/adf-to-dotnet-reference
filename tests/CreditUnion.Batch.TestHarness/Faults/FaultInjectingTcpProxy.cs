@@ -11,7 +11,18 @@ namespace CreditUnion.Batch.TestHarness.Faults;
 /// </summary>
 public sealed class FaultInjectingTcpProxy : IAsyncDisposable
 {
-    private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+    /// <summary>
+    /// First port of the block proxies listen on. The Db2 CLI driver keys its per-database settings by exact
+    /// host and port and reads them once per process, so a proxy that must see the driver's own connection
+    /// retry switched off (ADR 0009) has to sit on a port that is known when the process starts.
+    /// <see cref="BatchEnvironment"/> registers the block before the first Db2 connection.
+    /// </summary>
+    public const int ReservedPortStart = 15600;
+
+    /// <summary>Number of ports in the block that starts at <see cref="ReservedPortStart"/>.</summary>
+    public const int ReservedPortCount = 16;
+
+    private readonly TcpListener listener = ListenOnReservedPort();
     private readonly CancellationTokenSource stopping = new();
     private readonly string targetHost;
     private readonly int targetPort;
@@ -24,11 +35,13 @@ public sealed class FaultInjectingTcpProxy : IAsyncDisposable
     {
         this.targetHost = targetHost;
         this.targetPort = targetPort;
-        listener.Start();
         acceptLoop = AcceptLoopAsync();
     }
 
     public static string Host => "127.0.0.1";
+
+    /// <summary>The ports a proxy tries first, in order; when all are busy it falls back to an ephemeral port.</summary>
+    public static IReadOnlyList<int> ReservedPorts { get; } = [.. Enumerable.Range(ReservedPortStart, ReservedPortCount)];
 
     public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
 
@@ -37,6 +50,27 @@ public sealed class FaultInjectingTcpProxy : IAsyncDisposable
     public int ForwardedConnections => Volatile.Read(ref forwarded);
 
     public static FaultInjectingTcpProxy Start(string targetHost, int targetPort) => new(targetHost, targetPort);
+
+    private static TcpListener ListenOnReservedPort()
+    {
+        foreach (var port in ReservedPorts)
+        {
+            var candidate = new TcpListener(IPAddress.Loopback, port) { ExclusiveAddressUse = true };
+            try
+            {
+                candidate.Start();
+                return candidate;
+            }
+            catch (SocketException)
+            {
+                candidate.Stop();
+            }
+        }
+
+        var fallback = new TcpListener(IPAddress.Loopback, 0);
+        fallback.Start();
+        return fallback;
+    }
 
     public void RefuseNextConnections(int count)
     {
