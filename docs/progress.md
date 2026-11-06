@@ -343,3 +343,56 @@
   - The KeyBridge client's spans carry `url.full` (base URL plus fixed path, no credentials, no query).
   - Keep host logging of activity inputs off. The mapping JSON is an activity input; it is not sensitive, but it is large.
 - **Azure deployment:** `KeyBridge:Password` comes from Key Vault (`keybridge-api-password`). A base URL containing credentials, a query or a fragment is refused at the first call.
+
+## Phase 7 – Convert Reconciliation (2026-11-06)
+
+**Implemented (`PL_Reconciliation`, body of `ReconciliationOrchestrator`; ADR 0013):**
+- The orchestrator mirrors the ADF activities, order and dependencies, which `ReconPolicyTests` reads from the JSON: log Started; Lookup Card Totals and Lookup GL Totals together (`Task.WhenAll`); Record Recon Exceptions (a Lookup that writes); if `AlertRequired`, Post Recon Alert then Mark Recon Alert Sent; log the outcome (`Exceptions` or `Reconciled`, `RecordCount` = ExceptionCount, `Notes` as the ADF expression builds them, with SQL scale).
+  - It does no I/O and reads the time only from `context.CurrentUtcDateTime`. `ReconciliationInput`, the function name and the output are unchanged.
+- **Activities:** six `Recon_*` activities, thin wrappers over `ReconciliationSteps` (Core), registered through `AddCreditUnionBatch`. `SqlReconciliationStore` (KeyStone) only calls the Phase 1 procedures; the rules stay in SQL.
+- **Get Alert Webhook Url is configuration, not an activity.** The URL comes from `ReconAlertWebhookOptions` (a Key Vault reference in Azure) and is read inside the posting activity. It is never an activity input or output and so never in orchestration history; a test fails if a recon contract gains a `Uri`, `Url` or `Token` property.
+- **Post Recon Alert:** `HttpReconAlertClient`, a typed `HttpClient`. One POST per attempt; `Content-Type: application/json` as the ADF header says; `httpRequestTimeout` 1 min and activity timeout 2 min; the Durable `RetryPolicy` (4 attempts, 30 s) is the only retry layer. No redirects, no cookies, no HTTP-client loggers, no trace spans. Connection failures, timeouts, 408, 429 and 5xx are retried; other non-2xx and bad settings are not.
+- **The alert body** (`ReconFormat.AlertBody`) is the ADF expression's body in its property order, with the summary JSON-escaped (ADF does not escape).
+- **Shared:** `AdfRetry.IsRetriable` also skips the three alert exceptions and `ReconInputException`.
+
+**Decisions and ADRs:** ADR 0013 covers the granularity and the Key Vault step, the alert body and its escaping, the NULL GL count and tolerance handling, the delivery semantics (what the code guarantees and what it cannot), and webhook URL redaction. No new package; SqlClient `ConnectRetryCount` is 0. This phase reads no Db2 and no blob, so `Db2DriverConfiguration` and the Storage retry settings are not involved.
+
+**Webhook URL redaction (found by test, not assumed):**
+- `System.Net.Http` records the full URL of a request in a span; .NET redacts only the query string and the token is in the path. A positive control in `ReconAlertClientTests` shows a default `HttpClient` puts the token into a captured span.
+- Fix: `SocketsHttpHandler.ActivityHeadersPropagator = null` removes .NET's diagnostics handler for this client (no span, and no trace headers sent to the webhook), with `RemoveAllLoggers()` for the factory logs. A process-wide switch would also have removed the KeyBridge and Durable worker spans.
+- Mutation check: removing that line fails the production-registration test and the acceptance log scan.
+
+**Gate:**
+- **Build:** clean, warnings as errors (`./build.ps1 build`).
+- **AT-12 and AT-13 pass**, each with its idempotency rerun. AT-13 shows exactly one alert, equal to the golden alert, and the rerun posts none.
+- **Full run** (no `Category=Performance`): 556 tests (Phase 6 ended at 450; 106 new).
+  - `CU_TESTS_USE_COMPOSE=1` against the `./build.ps1 up` stack: **549 pass, 7 fail, 0 skipped.**
+  - Default Testcontainers mode (`./build.ps1 test`): **548 pass, 8 fail, 0 skipped.** The 8th is a flake, below.
+  - **The 7 failures**, identical on both stacks, each the `NotImplementedException` of a stub: AT-14 to AT-16 and the three AT-17 cases (`PL_Master_NightlyBatch`, Phase 8) and AT-18 (`TR_Nightly_0300_Pacific`, Phase 8).
+  - **Known flake, not fixed:** `LogCaptureAndPolicyTests.Findings_cover_…` (a Phase 3 harness self-test) failed once. `LogCapture` listens to every `ActivitySource` in the process, so an HTTP span from a test running at the same time lands in its capture and shifts its expected `span #1` to `span #5`. The KeyBridge tests could cause it too; the new HTTP tests make it more likely. It passes alone and on the compose run. Proposed fix, for approval because it edits an existing harness test: have that test count only spans from its own `ActivitySource`.
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Tests added:**
+- `ReconPolicyTests`: every policy, the dependency chain, the If expression, both Web activities (Key Vault read and POST), the lookup and Mark parameters, the tolerance default, and the Notes, Status and RecordCount expressions, all read from the ADF JSON, plus a completeness check over the nested activities. The body test fills the ADF expression's placeholders and requires the same bytes.
+- `ReconFormatTests`: notes, scale and culture, the golden alert, escaping (quote, backslash, control characters, a crafted summary, non-ASCII, a lone surrogate), 500 random amounts, tolerance validation.
+- `ReconOrchestratorTests` (in-process host, a fake store that applies the procedures' alert rule): order, parallel lookups, retries 30 s apart, a webhook that stays down, a rejected request, a POST delivered but timed out, a Mark that fails after a delivered POST, a Record that committed but lost its reply, a changed difference.
+- `ReconAlertClientTests`: the request, every status class, timeout, refused connection, cancellation, unsafe URLs, the production handler chain, logs and spans with a positive control, and a probe of the platform's exception messages.
+- `ReconciliationConversionTests` (acceptance): the AT-17 rules on Reconciliation runs (two scenarios, a retried 503); a webhook that is down for four attempts and then a rerun that alerts once; a rejected 404; a GL difference beyond and equal to the tolerance; an empty date; a tolerance SQL would round.
+
+**Differences from ADF a reviewer should know (ADR 0013):**
+- The Key Vault step has no counterpart: its retry (2, 30 s) and timeout (1 min) do not exist, and a missing URL fails the Post activity.
+- Not retried: 4xx other than 408 and 429, 3xx, a missing URL; ADF retries any failure 3 times. Redirects are not followed.
+- The summary is JSON-escaped; ADF would send invalid JSON for a quote or backslash.
+- `ItemsOutOfTolerance` is NULL in SQL when no GL item exists; it reads as 0 in the body and the notes (ADF would send invalid JSON and an empty note).
+- A negative tolerance, or one with more than two decimals, fails with `ReconInputException`; ADF would let SQL round it.
+- Delivery is at-least-once: a POST delivered but not acknowledged is sent again, and a Mark that fails after a delivered POST makes the next run post again. A lost alert was judged worse than a repeat. See ADR 0013 for the full table.
+- Unconfirmed against ADF: how it prints a `decimal(19,2)` from a Lookup (`0.10` or `0.1`) and what a parallel branch does when its sibling fails.
+
+**Notes for later phases:**
+- **Phase 8 (Master):**
+  - A failed Reconciliation arrives as a `TaskFailedException`; the inner type says why (`ReconAlertUnavailableException`, `ReconAlertRejectedException`, `ReconAlertConfigurationException`, `ReconInputException`, or a SQL error). No `Failed` event is logged, because the ADF pipeline has no failure branch.
+  - On a failure after Record, the exceptions are already in `ops.ReconExceptions` and unalerted if the POST never succeeded, so a rerun alerts them once. Decide in the master whether a recon alert failure fails the batch.
+  - The master's rerun for a date whose alert was delivered and marked posts nothing; a changed difference is a new exception and alerts again.
+  - The evidence export (`ops.usp_GetRunEvidence`) reads `ops.ReconExceptions` including `alertSentUtc` (`-` when the alert was never sent, as after a failed POST).
+- **Webhook redaction:** AT-17's three cases run the same recon path through the master. The client already has no span or HTTP logger, so they need nothing more here, but keep host logging of activity inputs off (the alert summary is an activity input).
+- **Azure deployment:** `ReconAlertWebhook:Url` must come from Key Vault (secret `recon-alert-webhook-url`) as an app-setting reference or a configuration provider. A URL that is not absolute http(s) is refused at the first alert.

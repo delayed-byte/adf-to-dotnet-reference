@@ -2,10 +2,12 @@ using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Configuration;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Map;
+using CreditUnion.Batch.Core.Reconciliation;
 using CreditUnion.Batch.KeyStone;
 using CreditUnion.Batch.KeyStone.Card;
 using CreditUnion.Batch.KeyStone.KeyBridge;
 using CreditUnion.Batch.KeyStone.Map;
+using CreditUnion.Batch.KeyStone.Reconciliation;
 using CreditUnion.Batch.KeyStone.Reporting;
 using CreditUnion.Batch.KeyStone.Staging;
 using Microsoft.Extensions.Configuration;
@@ -59,7 +61,29 @@ public static class BatchServiceCollectionExtensions
         services.TryAddSingleton<IMapAndAggregateStore, SqlMapAndAggregateStore>();
         AddKeyBridgeClient(services);
         services.TryAddTransient<MapAndAggregateSteps>();
+
+        // PL_Reconciliation (ADR 0013): the webhook URL is configuration (ReconAlertWebhookOptions) and is resolved inside the
+        // posting client. No Db2 and no blob is read, so Db2DriverConfiguration and the Storage retry settings are not involved.
+        services.TryAddSingleton(ReconActivityPolicies.Adf);
+        services.TryAddSingleton<IReconciliationStore, SqlReconciliationStore>();
+        AddReconAlertClient(services);
+        services.TryAddTransient<ReconciliationSteps>();
         return services;
+    }
+
+    /// <summary>
+    /// The typed alert-webhook client: <c>httpRequestTimeout</c> per request, no redirects, no cookies, no retry handler (the
+    /// Durable RetryPolicy is the only retry layer, ADR 0008), no HTTP-client loggers and no trace spans. The webhook URL carries
+    /// a secret token in its path; .NET redacts only query strings, and the client's span would record the full URL as
+    /// <c>url.full</c>, so the span is switched off for this client by removing its activity-headers propagator (ADR 0013).
+    /// </summary>
+    public static IHttpClientBuilder AddReconAlertClient(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services
+            .AddHttpClient<IReconAlertClient, HttpReconAlertClient>(client => client.Timeout = ReconAlertWebActivity.HttpRequestTimeout)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, ActivityHeadersPropagator = null })
+            .RemoveAllLoggers();
     }
 
     /// <summary>

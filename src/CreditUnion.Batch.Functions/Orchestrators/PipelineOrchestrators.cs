@@ -3,6 +3,7 @@ using CreditUnion.Batch.Core.Concurrency;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Map;
 using CreditUnion.Batch.Core.Pipelines;
+using CreditUnion.Batch.Core.Reconciliation;
 using CreditUnion.Batch.Functions.Activities;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
@@ -216,12 +217,66 @@ internal static partial class MapOrchestratorLog
     public static partial void LogUnmappedEventNotLogged(this ILogger logger, string errorType);
 }
 
-/// <summary>PL_Reconciliation: input <see cref="ReconciliationInput"/>.</summary>
+/// <summary>
+/// PL_Reconciliation: input <see cref="ReconciliationInput"/>. Mirrors the ADF activities in order: log Started; look up the
+/// card totals and the GL totals (both depend only on the Started event, so they run together); record the exceptions (a
+/// Lookup that writes); if an alert is still due, post it and mark it sent; log the outcome. Every I/O step is its own
+/// activity with the ADF activity's retry policy (ADR 0013); the If Condition and the status and notes expressions are
+/// deterministic code here. The webhook URL (a secret) is resolved inside the posting activity, never passed through Durable.
+/// </summary>
 public static class ReconciliationOrchestrator
 {
+    private static readonly ReconActivityPolicies Policies = ReconActivityPolicies.Adf;
+
     [Function(PipelineNames.Reconciliation)]
-    public static Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context) =>
-        throw new NotImplementedException($"{PipelineNames.Reconciliation} is not converted yet (docs/PRD.md, Phase 7).");
+    public static async Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var input = context.GetInput<ReconciliationInput>() ?? throw new InvalidOperationException($"{PipelineNames.Reconciliation} needs a ReconciliationInput.");
+        var logOptions = AdfRetry.Options(Policies.LogEvent);
+
+        // Log Recon Started
+        await context.CallActivityAsync(ReconActivityNames.LogEvent, Event(input, "Started") with { StartedUtc = context.CurrentUtcDateTime }, logOptions);
+
+        // Lookup Card Totals and Lookup GL Totals: both depend only on Log Recon Started
+        var query = new ReconQuery(input.BusinessDate, input.Tolerance);
+        var cardLookup = context.CallActivityAsync<CardReconTotals>(ReconActivityNames.LookupCardTotals, query, AdfRetry.Options(Policies.CardTotals));
+        var glLookup = context.CallActivityAsync<GlReconTotals>(ReconActivityNames.LookupGlTotals, query, AdfRetry.Options(Policies.GlTotals));
+        await Task.WhenAll(cardLookup, glLookup);
+        var card = await cardLookup;
+        var gl = await glLookup;
+
+        // Record Recon Exceptions (a Lookup that writes; a known exception adds no row)
+        var recorded = await context.CallActivityAsync<ReconExceptionResult>(
+            ReconActivityNames.RecordExceptions, new RecordReconExceptionsRequest(input.BusinessDate, input.BatchRunId, input.Tolerance),
+            AdfRetry.Options(Policies.RecordExceptions));
+
+        // If Alert Required: @equals(firstRow.AlertRequired, true)
+        if (recorded.AlertRequired)
+        {
+            // Get Alert Webhook Url is not an activity: the URL is configuration, read inside the posting activity (ADR 0013).
+            // Post Recon Alert (retry 3 = four attempts)
+            await context.CallActivityAsync(ReconActivityNames.PostAlert,
+                new ReconAlert(input.BusinessDate, input.BatchRunId, card.Difference, gl.ItemsOutOfTolerance, recorded.ExceptionCount, recorded.AlertSummary),
+                AdfRetry.Options(Policies.PostAlert));
+
+            // Mark Recon Alert Sent
+            await context.CallActivityAsync(ReconActivityNames.MarkAlertSent,
+                new MarkReconAlertSentRequest(input.BusinessDate, input.BatchRunId), AdfRetry.Options(Policies.MarkAlertSent));
+        }
+
+        // Log Recon Outcome
+        await context.CallActivityAsync(ReconActivityNames.LogEvent,
+            Event(input, ReconFormat.Status(recorded.IsOutOfTolerance)) with
+            {
+                RecordCount = recorded.ExceptionCount,
+                Notes = ReconFormat.Notes(card.Difference, gl.ItemsOutOfTolerance, input.Tolerance),
+                EndedUtc = context.CurrentUtcDateTime,
+            }, logOptions);
+    }
+
+    private static LogBatchRunEventRequest Event(ReconciliationInput input, string status) =>
+        new(input.BatchRunId, input.BusinessDate, PipelineNames.Reconciliation, status);
 }
 
 /// <summary>PL_Master_NightlyBatch: input <see cref="NightlyBatchInput"/>; the instance ID is the batchRunId.</summary>
