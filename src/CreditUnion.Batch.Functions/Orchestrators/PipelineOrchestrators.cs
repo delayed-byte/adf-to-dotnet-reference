@@ -1,10 +1,12 @@
 using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Concurrency;
 using CreditUnion.Batch.Core.Extract;
+using CreditUnion.Batch.Core.Map;
 using CreditUnion.Batch.Core.Pipelines;
 using CreditUnion.Batch.Functions.Activities;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
+using Microsoft.Extensions.Logging;
 
 namespace CreditUnion.Batch.Functions.Orchestrators;
 
@@ -141,12 +143,77 @@ public static class IngestCardSettlementOrchestrator
         new(input.BatchRunId, input.BusinessDate, PipelineNames.CardSettlement, status);
 }
 
-/// <summary>PL_MapAndAggregate: input <see cref="PipelineRunInput"/>.</summary>
+/// <summary>
+/// PL_MapAndAggregate: input <see cref="PipelineRunInput"/>. Mirrors the ADF activities in order: log Started, get the
+/// GL mapping from KeyBridge, cache it in ref.TxnCodeGlMap, look up the codes posted on the business date that have no
+/// mapping, then either log the Failed event and fail with TXN_CODE_UNMAPPED, or run the data flow (DF_MapAndAggregateGl)
+/// into core.DailyGlTotals and log Succeeded. Every I/O step is its own activity with the ADF activity's retry policy
+/// (ADR 0011, ADR 0012); the If Condition and the Fail activity are code here, so the validation failure is not retried.
+/// </summary>
 public static class MapAndAggregateOrchestrator
 {
+    private static readonly MapActivityPolicies Policies = MapActivityPolicies.Adf;
+
     [Function(PipelineNames.MapAndAggregate)]
-    public static Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context) =>
-        throw new NotImplementedException($"{PipelineNames.MapAndAggregate} is not converted yet (docs/PRD.md, Phase 6).");
+    public static async Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var input = context.GetInput<PipelineRunInput>() ?? throw new InvalidOperationException($"{PipelineNames.MapAndAggregate} needs a PipelineRunInput.");
+        var logOptions = AdfRetry.Options(Policies.LogEvent);
+
+        // Log Map Started
+        await context.CallActivityAsync(MapActivityNames.LogEvent, Event(input, "Started") with { StartedUtc = context.CurrentUtcDateTime }, logOptions);
+
+        // Get GL Mapping From KeyBridge (Web activity; base URL and credential from KeyBridgeOptions)
+        var mapping = await context.CallActivityAsync<KeyBridgeGlMappings>(MapActivityNames.GetGlMapping, input, AdfRetry.Options(Policies.GetGlMapping));
+
+        // Cache GL Mapping: MappingJson = @string(output.mappings), SourceVersion = output.version
+        await context.CallActivityAsync(MapActivityNames.CacheGlMapping,
+            new CacheGlMappingRequest(input.BatchRunId, mapping.MappingsJson, mapping.Version), AdfRetry.Options(Policies.CacheGlMapping));
+
+        // Lookup Unmapped Txn Codes (firstRowOnly)
+        var unmapped = await context.CallActivityAsync<UnmappedTxnCodes>(MapActivityNames.LookupUnmapped, input, AdfRetry.Options(Policies.LookupUnmapped));
+
+        // If Any Txn Code Unmapped: @greater(firstRow.UnmappedCount, 0)
+        if (unmapped.UnmappedCount > 0)
+        {
+            try
+            {
+                // Log Unmapped Txn Codes
+                await context.CallActivityAsync(MapActivityNames.LogUnmapped, Event(input, "Failed") with
+                {
+                    StepName = "CheckTxnCodeMapping",
+                    RecordCount = unmapped.UnmappedCount,
+                    ErrorCode = PipelineErrorCodes.TxnCodeUnmapped,
+                    ErrorMessage = unmapped.FailureMessage,
+                }, AdfRetry.Options(Policies.LogUnmapped));
+            }
+            catch (TaskFailedException e)
+            {
+                // Fail Txn Code Unmapped depends on the log with condition "Completed": it runs whether the log succeeded or not.
+                context.CreateReplaySafeLogger(typeof(MapAndAggregateOrchestrator).FullName!).LogUnmappedEventNotLogged(e.FailureDetails.ErrorType);
+            }
+
+            // Fail Txn Code Unmapped
+            throw new PipelineFailedException(PipelineErrorCodes.TxnCodeUnmapped, unmapped.FailureMessage);
+        }
+
+        // Aggregate Daily GL Totals (Execute Data Flow DF_MapAndAggregateGl)
+        await context.CallActivityAsync<int>(MapActivityNames.Aggregate, input, AdfRetry.Options(Policies.Aggregate));
+
+        // Log Map Succeeded
+        await context.CallActivityAsync(MapActivityNames.LogEvent,
+            Event(input, "Succeeded") with { ObjectName = "core.DailyGlTotals", EndedUtc = context.CurrentUtcDateTime }, logOptions);
+    }
+
+    private static LogBatchRunEventRequest Event(PipelineRunInput input, string status) =>
+        new(input.BatchRunId, input.BusinessDate, PipelineNames.MapAndAggregate, status);
+}
+
+internal static partial class MapOrchestratorLog
+{
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Log Unmapped Txn Codes failed ({ErrorType}); failing with TXN_CODE_UNMAPPED anyway, as the ADF Fail activity's 'Completed' dependency does.")]
+    public static partial void LogUnmappedEventNotLogged(this ILogger logger, string errorType);
 }
 
 /// <summary>PL_Reconciliation: input <see cref="ReconciliationInput"/>.</summary>

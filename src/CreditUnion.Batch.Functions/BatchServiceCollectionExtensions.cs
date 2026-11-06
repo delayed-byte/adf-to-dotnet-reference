@@ -1,8 +1,11 @@
 using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Configuration;
 using CreditUnion.Batch.Core.Extract;
+using CreditUnion.Batch.Core.Map;
 using CreditUnion.Batch.KeyStone;
 using CreditUnion.Batch.KeyStone.Card;
+using CreditUnion.Batch.KeyStone.KeyBridge;
+using CreditUnion.Batch.KeyStone.Map;
 using CreditUnion.Batch.KeyStone.Reporting;
 using CreditUnion.Batch.KeyStone.Staging;
 using Microsoft.Extensions.Configuration;
@@ -50,6 +53,26 @@ public static class BatchServiceCollectionExtensions
         services.TryAddSingleton<ICardSettlementStore, SqlCardSettlementStore>();
         services.TryAddSingleton<ICardBlobStore, AzureCardBlobStore>();
         services.TryAddSingleton<CardSettlementSteps>();
+
+        // PL_MapAndAggregate (ADR 0011, ADR 0012): keyBridgeBaseUrl and the credential are configuration (KeyBridgeOptions).
+        services.TryAddSingleton(MapActivityPolicies.Adf);
+        services.TryAddSingleton<IMapAndAggregateStore, SqlMapAndAggregateStore>();
+        AddKeyBridgeClient(services);
+        services.TryAddTransient<MapAndAggregateSteps>();
         return services;
+    }
+
+    /// <summary>
+    /// The typed KeyBridge client: <c>httpRequestTimeout</c> per request, no redirects (the Basic credential goes to the
+    /// configured host only), no cookies, no retry handler (the Durable RetryPolicy is the only retry layer, ADR 0008) and
+    /// no HTTP-client loggers, so request URLs and headers are never logged by the factory (ADR 0012).
+    /// </summary>
+    public static IHttpClientBuilder AddKeyBridgeClient(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services
+            .AddHttpClient<IKeyBridgeClient, HttpKeyBridgeClient>(client => client.Timeout = KeyBridgeWebActivity.HttpRequestTimeout)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false })
+            .RemoveAllLoggers();
     }
 }

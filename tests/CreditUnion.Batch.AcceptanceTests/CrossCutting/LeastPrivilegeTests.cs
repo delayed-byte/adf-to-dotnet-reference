@@ -69,6 +69,8 @@ public sealed class LeastPrivilegeTests(BatchEnvironmentFixture fixture)
     [MemberData(nameof(ReportingWrites))]
     public async Task AT19_the_reader_login_cannot_write_to_the_reporting_store(string statement)
     {
+        // The positive control inserts real keys (e.g. 2026-11-04 / GL 1010), so earlier tests' rows must not be there.
+        await Env.Reporting.ResetAsync(Ct);
         await using (var admin = await ReportingDatabase.OpenAsync(Env.Reporting.AdminConnectionString, Ct))
         await using (var transaction = (SqlTransaction)await admin.BeginTransactionAsync(Ct))
         {

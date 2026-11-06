@@ -263,3 +263,83 @@
 - **Phase 8:** a failed card ingest arrives as a `TaskFailedException`; a `CardFileDataException` shows as the inner failure's type. Sub-orchestrations need the `PipelineRunInput` with the master's instance ID as `BatchRunId`.
 - **Audit:** `ops.CardFileLog` is append-only. A retried `Log File …` activity whose first insert committed but whose reply was lost would add a second row (as ADF would).
 - **Azure deployment:** the container names and `RetainUntil` are `BlobStorage:*` settings; the connection string holds the account key and must come from Key Vault. A managed identity would need `BlobServiceClient` constructed from a URI instead of `AzureCardBlobStore`'s connection string.
+
+## Phase 6 – Convert Map and Aggregate (2026-11-06)
+
+**Implemented (`PL_MapAndAggregate`, body of `MapAndAggregateOrchestrator`; ADR 0011, ADR 0012):**
+- The orchestrator mirrors the ADF activities, order and dependencies, which `MapPolicyTests` reads from the JSON: log Started, get the GL mapping from KeyBridge, cache it (`ref.usp_UpsertTxnCodeGlMap`), look up unmapped codes (`ref.usp_GetUnmappedTxnCodes`), then one of two branches:
+  - **Unmapped codes:** log the `Failed` event (CheckTxnCodeMapping, TXN_CODE_UNMAPPED), then throw `PipelineFailedException(TXN_CODE_UNMAPPED, "Unmapped transaction codes: …")`. The throw runs even if the log fails, as the Fail activity's `Completed` dependency says. It is never retried, and nothing is aggregated.
+  - **Otherwise:** run the data flow, then log Succeeded with `ObjectName` core.DailyGlTotals.
+- The orchestrator does no I/O and reads the time only from `context.CurrentUtcDateTime`. The `PipelineRunInput` record, the function name and the output are unchanged. The KeyBridge base URL and credential come from `KeyBridgeOptions`.
+- **Activities:** six `Map_*` activities, thin wrappers over `MapAndAggregateSteps` (Core), registered through `AddCreditUnionBatch`.
+- **The data flow** (`DF_MapAndAggregateGl`) is a pure, streaming C# aggregator, `DailyGlTotalsAggregator` (Core):
+  - Inner join on TxnCode, exact match.
+  - `decimal.Round(Amount * AllocationRatio, 2, MidpointRounding.ToEven)` on the exact decimal product, once per allocation. No floating point anywhere.
+  - Debit or credit by `DrCr`; per-GL-account sums; `countDistinct(TxnId)`; `NetAmount`.
+  - `SqlMapAndAggregateStore` (KeyStone) only reads the two sources and replaces the date's `core.DailyGlTotals` (delete and insert in one transaction).
+- **KeyBridge:** `HttpKeyBridgeClient` (KeyStone) is a typed `HttpClient` that makes exactly one request per call.
+  - `HttpClient.Timeout` is the ADF `httpRequestTimeout` (1 min); `AttemptTimeout` enforces the activity timeout (5 min).
+  - Basic credential from options; no redirects, no cookies; no retry handler and no HTTP-client loggers.
+
+**Decisions and ADRs:**
+- **ADR 0011 (data flow):** set-based SQL vs C#, and why C#. Also: the business-date filter (`PostingDate`, verbatim), reversals (ordinary rows), zero allocations (counted, row written), empty days (the delete still runs), `TxnCount`, and the sink transaction.
+- **ADR 0012:** activity granularity; the HTTP handling and its error classification (408, 429, 5xx, timeouts and connection failures are retried; 401 and other non-2xx, unusable bodies and bad settings are not); how the mapping JSON travels and is cached; data protection; the new dependency.
+- **Dependency:** `Microsoft.Extensions.Http` pinned at 10.0.9 and referenced by Functions. It was already in the graph at 6.0.0 transitively, but 6.0 lacks `RemoveAllLoggers` and logs headers at Trace without redaction. No Polly.
+- **Driver retries:** SqlClient `ConnectRetryCount` is 0 (`Connections`). No Db2 and no blob are read, so `Db2DriverConfiguration` and the Storage retry settings are not involved.
+
+**Gate:**
+- **Build:** clean, warnings as errors.
+- **AT-08 to AT-11 pass**, each with its idempotency rerun. AT-11 shows 3 KeyBridge calls and 2 failed attempts, retried 30 s apart under the Web activity policy (4 attempts).
+- **Full run** (no `Category=Performance`), on both stacks: 450 tests, **441 pass, 9 fail, 0 skipped**.
+  - Default Testcontainers mode (`./build.ps1 test`, fresh containers): 441 / 9 / 0.
+  - `CU_TESTS_USE_COMPOSE=1` against the `./build.ps1 up` stack: 441 / 9 / 0.
+  - **UnitTests: 363 pass** (119 new).
+  - **AcceptanceTests: 87 cases; 78 pass, 9 fail** (6 new cases in `MapAndAggregateConversionTests`).
+- **The 9 failures**, identical on both stacks, each the `NotImplementedException` of a stub:
+  - AT-12 and AT-13 get past Extract, Card and Map and stop at `PL_Reconciliation` (Phase 7).
+  - AT-14 to AT-16 (3) and the three AT-17 cases stop at `PL_Master_NightlyBatch` (Phase 8).
+  - AT-18 stops at `TR_Nightly_0300_Pacific` (Phase 8).
+- **Still passing:** AT-01 to AT-07, AT-19, the harness self-tests (including `GoldenConsistencyTests`' independent T-SQL statement of the rule) and every unit test.
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Tests added:**
+- `DailyGlTotalsAggregatorTests`:
+  - hand-checked midpoints, including the full `map-midpoint-rounding` worksheet and negative values;
+  - per-allocation vs per-sum rounding;
+  - D and C on the same account; reversals; zero allocations; the exact join;
+  - four property tests over 500 seeds each, against an integer half-to-even reference;
+  - every golden `core.DailyGlTotals` date reproduced from the golden transactions and mapping.
+- `MapPolicyTests`: every policy, the dependency chain, the Fail expression, the Web request, the cache and lookup parameters and the data flow script lines, all read from the ADF JSON, plus a completeness check.
+- `KeyBridgeClientTests`: the request; each status class; timeouts; refused connections; config refusals; no secret in messages; and the production registration's handler chain, logs and spans.
+- `MapOrchestratorTests` (in-process host with fakes).
+- `MapAndAggregateConversionTests` (acceptance):
+  - the AT-17 rules applied to Map runs on three scenarios, including a retried 503;
+  - a 401 is not retried;
+  - an invalid mapping is not retried and leaves the cache unchanged;
+  - the sink replaces only its date, atomically and in chunks.
+
+**Test-isolation fix (approved):** `LeastPrivilegeTests.AT19_the_reader_login_cannot_write_to_the_reporting_store` now resets the reporting store first. Its admin positive control inserts `core.DailyGlTotals (2026-11-04, '1010')`, which the now-passing Map tests leave behind; the test failed whenever it ran after them. The assertions are unchanged.
+
+**Differences from ADF a reviewer should know (ADR 0011, ADR 0012):**
+- **Not retried:**
+  - KeyBridge 401, 403, 404, other 4xx and 3xx (ADF retries any failure 3 times);
+  - a 2xx body that is not JSON, has no `mappings` or exceeds 4 MB;
+  - a mapping that `ref.usp_UpsertTxnCodeGlMap` rejects (53000 to 53004; ADF would retry twice).
+- **Redirects** are not followed, so the credential reaches the configured host only. ADF's behaviour is unconfirmed.
+- **A transaction with no mapping row** at aggregation time fails with `GlAggregationException`; ADF's inner join drops it silently. It is reachable only if the mapping changes after the check, or if a code differs from its mapping in case: the check is case-insensitive (database collation), the join case-sensitive.
+- **The sink's delete and insert share a transaction**; ADF runs the pre-SQL and the write separately.
+- **A missing `version`** in the KeyBridge response becomes NULL; ADF would fail the expression.
+- **Rounding:** 1.175 rounds to 1.18 (decimal, half to even, per the PRD). Whether ADF's double-based `round()` gives 1.17 or 1.18 depends on its runtime and is unconfirmed (ADR 0011, ADR 0007).
+- **Unconfirmed:** ADF is assumed to run the pre-SQL delete even when the date has no transactions.
+
+**Notes for later phases:**
+- **Phase 7 (Reconciliation)** reads `core.DailyGlTotals` by `BusinessDate`, one row per GL account (`char(10)`, padded): `DebitTotal` and `CreditTotal` (`decimal(19,2)`), `NetAmount` = Debit − Credit, and `TxnCount`.
+  - Rows exist only for GL accounts touched by that date's mapped transactions.
+  - A date is either completely replaced or unchanged, never partial. A Map rerun with the same inputs leaves the rows identical (no audit columns).
+  - `ops.fn_ReconDetail` compares them per account and side with `core.GlEntry`.
+- **Phase 8 (Master):**
+  - TXN_CODE_UNMAPPED arrives as a `TaskFailedException`. `PipelineFailedException.TryParse` on its inner failure recovers the code for the master's Failed event (`BATCH_STEP_FAILED`, child code TXN_CODE_UNMAPPED).
+  - Other Map failures log no Failed event (no failure branch in ADF).
+  - The KeyBridge client's spans carry `url.full` (base URL plus fixed path, no credentials, no query).
+  - Keep host logging of activity inputs off. The mapping JSON is an activity input; it is not sensitive, but it is large.
+- **Azure deployment:** `KeyBridge:Password` comes from Key Vault (`keybridge-api-password`). A base URL containing credentials, a query or a fragment is refused at the first call.
