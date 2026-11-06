@@ -18,6 +18,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageVersion Include="NCrontab.Signed" Version="3.3.0" />
     <PackageVersion Include="Net.IBM.Data.Db2" Version="10.0.0.400" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="Testcontainers.Azurite" Version="4.16.0" />

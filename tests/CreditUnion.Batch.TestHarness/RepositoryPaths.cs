@@ -9,11 +9,16 @@ public static class RepositoryPaths
 
     public static string Root => LazyRoot.Value;
 
+    public static string Adf => Path.Combine(Root, "adf");
+
     public static string Db2Scripts => Path.Combine(Root, "db", "keystone-db2");
 
     public static string ReportingScripts => Path.Combine(Root, "db", "reporting");
 
     public static string Db2ExtractUserScript => Path.Combine(Db2Scripts, "custom", "create_extract_user.sh");
+
+    /// <summary>The Functions app's local.settings.json: the app settings <c>func start</c> uses (e.g. WEBSITE_TIME_ZONE).</summary>
+    public static string FunctionsLocalSettings => Path.Combine(Root, "src", "CreditUnion.Batch.Functions", "local.settings.json");
 
     public static string EnvFile => Path.Combine(Root, ".env");
 }

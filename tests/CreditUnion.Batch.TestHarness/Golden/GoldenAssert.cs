@@ -87,14 +87,17 @@ public static partial class GoldenAssert
     }
 
     /// <summary>Blob names, content and metadata after the runs. Evidence files are compared section by section.</summary>
-    public static async Task<IReadOnlyList<string>> BlobDifferencesAsync(BlobStore store, Scenario scenario, IReadOnlyList<Guid> runIds, CancellationToken cancellationToken = default)
+    /// <param name="containers">Compare only these containers (a pipeline's own); null compares all of them.</param>
+    public static async Task<IReadOnlyList<string>> BlobDifferencesAsync(BlobStore store, Scenario scenario, IReadOnlyList<Guid> runIds, IReadOnlyCollection<string>? containers = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(scenario);
         var tokens = new RunTokens(runIds);
-        var actual = (await store.ListAsync(cancellationToken).ConfigureAwait(false)).ToDictionary(b => $"{b.Container}/{b.Name}", StringComparer.Ordinal);
+        var actual = (await store.ListAsync(cancellationToken).ConfigureAwait(false))
+            .Where(b => containers is null || containers.Contains(b.Container))
+            .ToDictionary(b => $"{b.Container}/{b.Name}", StringComparer.Ordinal);
         var differences = new List<string>();
-        foreach (var e in scenario.Golden.Blobs)
+        foreach (var e in scenario.Golden.Blobs.Where(b => containers is null || containers.Contains(b.Container)))
         {
             var path = $"{e.Container}/{tokens.Resolve(e.Name)}";
             if (!actual.Remove(path, out var blob))
@@ -127,9 +130,9 @@ public static partial class GoldenAssert
         return differences;
     }
 
-    public static async Task BlobsMatchAsync(BlobStore store, Scenario scenario, IReadOnlyList<Guid> runIds, CancellationToken cancellationToken = default)
+    public static async Task BlobsMatchAsync(BlobStore store, Scenario scenario, IReadOnlyList<Guid> runIds, IReadOnlyCollection<string>? containers = null, CancellationToken cancellationToken = default)
     {
-        var differences = await BlobDifferencesAsync(store, scenario, runIds, cancellationToken).ConfigureAwait(false);
+        var differences = await BlobDifferencesAsync(store, scenario, runIds, containers, cancellationToken).ConfigureAwait(false);
         ThrowIfAny(scenario, "blobs", differences, []);
     }
 

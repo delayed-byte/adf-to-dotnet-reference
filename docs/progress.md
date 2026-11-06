@@ -117,3 +117,51 @@
 - Phase 3 needs an in-process orchestration runner (a test `TaskOrchestrationContext`) that executes activities directly. With virtual time, retries "per policy" (30 s intervals) can be asserted without waiting.
 - The Db2 loader inserts row by row (standard-day loads in a few seconds). `perf-extract-1m` will need `DB2BulkCopy` or `LOAD` in Phase 4.
 - Known limitation (ADR 0005): merge change detection ignores trailing-space-only and case-only corrections.
+
+## Phase 3 – Acceptance tests (2026-11-05)
+
+**Entry points (stubs) and contracts (ADR 0008):**
+- One orchestrator function per ADF pipeline, named after it (`PipelineNames`), and the timer function `TR_Nightly_0300_Pacific`. Each body throws `NotImplementedException` naming the phase that converts it.
+- Typed inputs: `PipelineRunInput`, `ReconciliationInput` and `NightlyBatchInput`. The master's instance ID is its `batchRunId`.
+- `PipelineFailedException` carries ADF error codes as `"{code}: {detail}"`.
+- Options classes, one per linked service.
+- `AddCreditUnionBatch`, the one composition root used by `Program.cs` and the tests.
+- `local.settings.json` sets `WEBSITE_TIME_ZONE=America/Los_Angeles`.
+
+**Harness additions (`tests/CreditUnion.Batch.TestHarness`):**
+- `Orchestration/InProcessFunctionHost`: runs the app's own `[Function]` methods with a custom `TaskOrchestrationContext`.
+  - Inputs and outputs cross as JSON, and failures as `TaskFailedException`.
+  - `RetryPolicy` is applied as DurableTask.Core applies it, on a virtual clock that is also the batch's `TimeProvider`.
+  - Scheduled work starts only when the orchestrator yields, and leaving the orchestrator thread fails.
+  - A trace records every attempt and sub-orchestration.
+- `RecordingDurableTaskClient` and `TimerTriggerEmulator` (NCRONTAB in `WEBSITE_TIME_ZONE`, NCrontab.Signed 3.3.0) for AT-18.
+- `Logging/LogCapture`: every `ILogger` entry and every `ActivitySource` span, scanned for secrets and for full member, account and card numbers.
+- `Adf/AdfActivityPolicy` reads retry policies from `adf/pipeline`.
+- `GoldenAssert` blob comparison takes a container filter.
+
+**Acceptance tests (`tests/CreditUnion.Batch.AcceptanceTests`):**
+- AT-01 to AT-19, one folder per pipeline plus `CrossCutting`, tagged `[Trait("AT", "AT-nn")]`.
+- Every test ends with an idempotency rerun under new batch run IDs.
+- Map and Reconciliation tests run their upstream pipelines as preconditions.
+- AT-04 and AT-11 assert retries through the trace against the ADF policy (3 retries, 30 s), plus the fault counts (2 refused connections; 3 KeyBridge calls).
+- AT-10 restates banker's rounding from the inputs: 16.30 and 5.43, against 16.35 and 5.48 with half away from zero.
+- AT-17 runs three scenarios: happy path, alert and failure.
+- AT-19 runs each write first as admin in a rolled-back transaction (a positive control), then as the restricted login.
+
+**Gate:**
+- **Build:** clean, warnings as errors.
+- **UnitTests: 98 pass**, including 21 new self-tests of the host, the timer emulator, log capture, ADF policies and the entry-point contracts.
+  - The host self-tests passed 15 repeated runs.
+- **AcceptanceTests: 76 cases, none skipped.**
+  - 44 harness self-tests pass.
+  - The 20 cases of AT-01 to AT-18 fail with the `NotImplementedException` of a stub: Extract (Phase 4), Card (Phase 5), Master (Phase 8) and the trigger (Phase 8). Map and Recon tests fail at their Extract precondition.
+  - The 12 cases of AT-19 pass by design: the logins and grants were built in Phase 1.
+  - Checked by a script over the xUnit XML report.
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Notes for later phases:**
+- **Retries:** use `RetryPolicy` on the activity call. Do not add Polly or driver-level retries on top. If the Db2 driver retries connections itself, AT-04 will see no failed attempts and fail.
+- **Validation failures** (unmapped codes) must not be retried.
+- **Timer trigger:** it must set `NightlyBatchInput.BusinessDate` and take the fire time from `TimeProvider`; `ScheduleStatus` is null in AT-18.
+- **The in-process host does not replay orchestrators.** The PRD's determinism replay test is Phase 8 work.
+- **AT-17 needs explicit handling in Phase 8:** the webhook token is in the URL path, and HTTP-client logs and spans do not redact it.

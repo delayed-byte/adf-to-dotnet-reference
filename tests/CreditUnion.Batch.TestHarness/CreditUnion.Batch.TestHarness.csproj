@@ -2,8 +2,9 @@
   <!--
     Test harness (Phase 2, ADR 0006): Testcontainers fixtures for Db2, SQL Server and Azurite,
     scenario loaders, database snapshots and golden comparison, KeyBridge and alert-webhook stubs
-    (WireMock.Net, in process) and a fault-injecting TCP proxy. No test-framework dependency:
-    test projects wrap BatchEnvironment in their own fixtures.
+    (WireMock.Net, in process) and a fault-injecting TCP proxy. Phase 3 (ADR 0008): an in-process
+    Durable Functions host (orchestration runner, recording client, timer emulator) and log capture.
+    No test-framework dependency: test projects wrap BatchEnvironment in their own fixtures.
   -->
   <PropertyGroup>
     <RootNamespace>CreditUnion.Batch.TestHarness</RootNamespace>
@@ -15,7 +16,10 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="NCrontab.Signed" />
     <PackageReference Include="Net.IBM.Data.Db2" />
     <PackageReference Include="Testcontainers.Azurite" />
     <PackageReference Include="Testcontainers.Db2" />
