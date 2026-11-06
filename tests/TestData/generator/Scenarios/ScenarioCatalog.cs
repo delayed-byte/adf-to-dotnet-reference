@@ -38,7 +38,8 @@ public static class ScenarioCatalog
             ["AT-03"], 20261105, [new RunSpec(1, Pipelines.Extract, BusinessDate)], Db2TypeEdgeCases),
 
         new("card-quarantine-trailer-mismatch",
-            "Three settlement files; the second claims one more detail record in its trailer than it contains. That file is quarantined with an error manifest; the other two load.",
+            "Three settlement files; the second claims one more detail record in its trailer than it contains. That file is quarantined with an error manifest; the other two load. " +
+            "The third is named SETTLEMENT_003.CSV and is still picked up, because ADF's startsWith/endsWith ignore case (ADR 0007).",
             ["AT-06"], 20261106, [new RunSpec(1, Pipelines.Card, BusinessDate)], CardTrailerMismatch),
 
         new("card-empty-landing",
@@ -139,6 +140,7 @@ public static class ScenarioCatalog
         var world = w.Build();
         var files = world.SettlementFiles.ToList();
         files[1] = files[1] with { TrailerCount = (files[1].Details.Count + 1).ToString(CultureInfo.InvariantCulture) };
+        files[2] = files[2] with { FileName = "SETTLEMENT_003.CSV" };
         return new ScenarioInputs(world.KeyStone, files, [], mapping, false);
     }
 

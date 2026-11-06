@@ -91,7 +91,7 @@ Formatting never rounds: a value that does not fit its type throws.
 2. Rounding happens per allocation, before summing.
 3. A child pipeline's error code is propagated to the master's Failed event (`TXN_CODE_UNMAPPED`), and the master fails with `BATCH_STEP_FAILED`.
 4. Decimals in `ops.BatchRun` notes keep their SQL scale (`card difference=0.00`).
-5. Get Metadata is non-recursive; folders and non-matching names are skipped, and a missing folder behaves like an empty one. The golden output uses lowercase file names only. ADF documents `startsWith` and `endsWith` as case-insensitive, so a case-sensitive .NET filter would differ for `Settlement_001.CSV`. This is open.
+5. Get Metadata is non-recursive; folders and non-matching names are skipped, and a missing folder behaves like an empty one. File names match `settlement_*.csv` case-insensitively, as ADF's `startsWith` and `endsWith` do (decided in ADR 0007).
 6. Empty settlement fields are NULL (the dataset's `nullValue` is `""`).
 7. Db2 values are copied verbatim (ADR 0005).
 

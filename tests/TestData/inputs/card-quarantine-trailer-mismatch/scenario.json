@@ -1,6 +1,6 @@
 {
   "scenario": "card-quarantine-trailer-mismatch",
-  "description": "Three settlement files; the second claims one more detail record in its trailer than it contains. That file is quarantined with an error manifest; the other two load.",
+  "description": "Three settlement files; the second claims one more detail record in its trailer than it contains. That file is quarantined with an error manifest; the other two load. The third is named SETTLEMENT_003.CSV and is still picked up, because ADF's startsWith/endsWith ignore case (ADR 0007).",
   "acceptanceTests": [
     "AT-06"
   ],
@@ -17,7 +17,7 @@
   "blobs": [
     "blobs/card-landing/2026-11-04/settlement_001.csv",
     "blobs/card-landing/2026-11-04/settlement_002.csv",
-    "blobs/card-landing/2026-11-04/settlement_003.csv"
+    "blobs/card-landing/2026-11-04/SETTLEMENT_003.CSV"
   ],
   "runs": [
     {

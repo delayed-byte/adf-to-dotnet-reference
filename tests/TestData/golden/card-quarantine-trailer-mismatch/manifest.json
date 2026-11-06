@@ -6,7 +6,7 @@
       "name": "core.CardSettlement",
       "file": "tables/core.CardSettlement.csv",
       "rowCount": 32,
-      "sha256": "7a8bdc020b6d151b596df2497a03c9699c524b01da2d11c8f535cfb4627407a9",
+      "sha256": "9290e15a2d17784ecf1a9ef162d6bf993ca821f480cd7691b29b0812879350f6",
       "keyColumns": [
         "ProcessorRefNbr"
       ]
@@ -15,7 +15,7 @@
       "name": "ops.CardFileLog",
       "file": "tables/ops.CardFileLog.csv",
       "rowCount": 3,
-      "sha256": "4eb0a6cfdeb98d6d7bf573360e211270005b6cdeb27aaf58942bd1c0e88e3bd1",
+      "sha256": "9c9921f871a7a52e97c2ef50326a9032877bb45094fb9130da946a5452aa542e",
       "keyColumns": [
         "Run",
         "BusinessDate",
@@ -52,8 +52,8 @@
   "blobs": [
     {
       "container": "card-archive",
-      "name": "2026-11-04/settlement_001.csv",
-      "sha256": "f70fb990506a2df684cbc55ae08c56db28890d109bc00a853f90ffb0697fff62",
+      "name": "2026-11-04/SETTLEMENT_003.CSV",
+      "sha256": "4d39a89c9b5ee20cdceaefaf65f063a4e8a331604c361e88c297c552e917fe38",
       "metadata": {
         "batch_run_id": "{run:1}",
         "retain_until": "TBD"
@@ -62,8 +62,8 @@
     },
     {
       "container": "card-archive",
-      "name": "2026-11-04/settlement_003.csv",
-      "sha256": "4d39a89c9b5ee20cdceaefaf65f063a4e8a331604c361e88c297c552e917fe38",
+      "name": "2026-11-04/settlement_001.csv",
+      "sha256": "f70fb990506a2df684cbc55ae08c56db28890d109bc00a853f90ffb0697fff62",
       "metadata": {
         "batch_run_id": "{run:1}",
         "retain_until": "TBD"

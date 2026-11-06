@@ -111,9 +111,9 @@
 - The same procedure hashed a NULL `char(4)` Mcc as `'\N  '`, because `ISNULL` takes the first argument's type. It now converts to `nvarchar` first, as its comment specifies.
 
 **Notes for later phases:**
-- Golden outputs are not yet signed off. The review in `tests/TestData/REVIEW.md` is due before Phase 3. Open questions:
-  - Is the settlement file filter case-insensitive, as ADF's `startsWith` is?
-  - Does the master's `ErrorCode` carry the child's code?
+- Golden outputs are signed off by engineering review (`tests/TestData/REVIEW.md`, ADR 0007), because no business reviewer was available; one must confirm before go-live.
+  - Settlement file names match case-insensitively, as ADF's `startsWith` does. `card-quarantine-trailer-mismatch` now includes `SETTLEMENT_003.CSV`, so Phase 5 must do the same.
+  - On a child failure, the master's Failed event carries the child's error code.
 - Phase 3 needs an in-process orchestration runner (a test `TaskOrchestrationContext`) that executes activities directly. With virtual time, retries "per policy" (30 s intervals) can be asserted without waiting.
 - The Db2 loader inserts row by row (standard-day loads in a few seconds). `perf-extract-1m` will need `DB2BulkCopy` or `LOAD` in Phase 4.
 - Known limitation (ADR 0005): merge change detection ignores trailing-space-only and case-only corrections.

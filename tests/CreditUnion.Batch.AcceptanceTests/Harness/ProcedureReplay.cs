@@ -92,7 +92,7 @@ internal sealed class ProcedureReplay(ReportingDatabase database, Scenario scena
         await ExecAsync("stg.usp_ResetCardSettlementStaging", ct, ("@BusinessDate", date));
         var folder = CanonicalValue.Date(date) + "/";
         var files = landing.Keys.Where(n => n.StartsWith(folder, StringComparison.Ordinal)).Select(n => n[folder.Length..])
-            .Where(f => !f.Contains('/', StringComparison.Ordinal) && f.StartsWith("settlement_", StringComparison.Ordinal) && f.EndsWith(".csv", StringComparison.Ordinal))
+            .Where(f => !f.Contains('/', StringComparison.Ordinal) && f.StartsWith("settlement_", StringComparison.OrdinalIgnoreCase) && f.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal).ToList();
 
         foreach (var file in files)

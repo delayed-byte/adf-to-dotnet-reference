@@ -208,7 +208,7 @@ public sealed class BatchOracle
     }
 
     // PL_IngestCardSettlement: list card-landing/{date}/ (non-recursive; folders are skipped), keep
-    // settlement_*.csv, validate each file, promote and archive valid files, write an error manifest
+    // settlement_*.csv (case-insensitive like ADF's startsWith/endsWith, ADR 0007), validate each file, promote and archive valid files, write an error manifest
     // and quarantine invalid ones, then merge staging into core.CardSettlement.
     private ChildResult IngestCard(RunContext context)
     {
@@ -220,8 +220,8 @@ public sealed class BatchOracle
             .Where(b => b.Container == LandingContainer && b.Name.StartsWith(folder, StringComparison.Ordinal))
             .Select(b => (Blob: b, FileName: b.Name[folder.Length..]))
             .Where(f => !f.FileName.Contains('/', StringComparison.Ordinal)
-                        && f.FileName.StartsWith("settlement_", StringComparison.Ordinal)
-                        && f.FileName.EndsWith(".csv", StringComparison.Ordinal))
+                        && f.FileName.StartsWith("settlement_", StringComparison.OrdinalIgnoreCase)
+                        && f.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var staged = new List<CardSettlementRow>();
