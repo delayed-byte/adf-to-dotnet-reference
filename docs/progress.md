@@ -217,3 +217,49 @@
 - **Phase 8:** a failed extract throws `TaskFailedException` and logs no `Failed` event, because the ADF pipeline has no failure branch. The master turns it into `BATCH_STEP_FAILED` and records the failure.
 - **Phase 5:** Card settlement can reuse `BoundedParallel`, `AdfRetry`, `ExtractKeyStoneSteps`' timeout pattern and the `Connections` helpers.
 
+
+## Phase 5 – Convert Card Settlement (2026-11-06)
+
+**Implemented (`PL_IngestCardSettlement`, body of `IngestCardSettlementOrchestrator`; ADR 0010):**
+- The orchestrator mirrors the ADF activities in order: log Started, reset staging, list `card-landing/{businessDate}/`, filter, then per file (at most four at once, `BoundedParallel`) copy to raw staging, validate, and either promote, archive, delete the landing file and log `Archived`, or write the error manifest, quarantine, delete and log `Quarantined`; then merge into core and log Succeeded (`RecordCount` is the filtered file count; `Notes` as the ADF expression builds them).
+  - It does no I/O and reads the time only from `context.CurrentUtcDateTime`. The `PipelineRunInput` record, the function name and the output are unchanged; the containers and `retainUntil` come from `BlobStorageOptions`.
+  - Each I/O activity is its own retried call (14 `Card_*` functions, thin wrappers over `CardSettlementSteps` in Core). The Filter is a pure function (`SettlementFileFilter`), matched case-insensitively (ADR 0007).
+  - A quarantined file is not a failure. Any other failure throws and logs no `Failed` event.
+- `SettlementCsvReader` (Core) parses the CSV as `DS_Blob_CardSettlementCsv` says and streams it; `SqlCardSettlementStore.LoadRawAsync` bulk-copies it in batches of 10,000 inside one transaction with the pre-copy delete. No intermediate file. Validation, promotion, the manifest rows and the merge are the Phase 1 procedures; nothing from the oracle's C# port is in `src`.
+- `AzureCardBlobStore` (`CreditUnion.Batch.KeyStone`) lists, reads, copies (with `retain_until` and `batch_run_id` metadata), deletes (`DeleteIfExists`) and writes blobs.
+- Shared: `AttemptTimeout` (the per-attempt ADF timeout, moved out of `ExtractKeyStoneSteps`) and `BatchRunLog` (one `ops.usp_LogBatchRunEvent` call, used by both pipelines' stores). `AdfRetry` also skips `CardFileDataException`.
+
+**Retries (ADR 0010):** each `CallActivityAsync` has `retry + 1` attempts at a fixed 30 s interval (all 15 ADF policies are retry 2 and 30 s; the timeouts differ per activity). `CardPolicyTests` reads every value, `batchCount` and the parameter defaults from the ADF JSON and fails if an activity with a policy is added or renamed. SqlClient `ConnectRetryCount` is 0 and the Azure Storage SDK's `Retry.MaxRetries` is 0. No Polly. This pipeline reads no Db2, so `Db2DriverConfiguration` is untouched.
+
+**Decisions and ADRs:** ADR 0010 covers the activity granularity, the CSV rules (BOM, LF-only row delimiter so a CR is data, empty lines skipped, quoted fields, empty is null, 10 mapped columns, 200-character limit), the blob SDK retries, idempotency and data protection. No new package: `Azure.Storage.Blobs` was already pinned.
+
+**Gate:**
+- **Build:** clean, warnings as errors (`./build.ps1 build`).
+- **AT-05, AT-06 and AT-07 pass**, each with its idempotency rerun (new batch run IDs; the landing files are gone, so nothing is rewritten, `core.CardSettlement` and every blob are unchanged, and only `ops.BatchRun` and `ops.CardFileLog`'s audit growth is allowed).
+- **AT-01 to AT-04, AT-19, the harness self-tests and every unit test pass; none is skipped.**
+- **Full run** (`dotnet test --solution`, no `Category=Performance`): 325 tests, **312 pass, 13 fail, 0 skipped**, on both stacks:
+  - `CU_TESTS_USE_COMPOSE=1` against the `./build.ps1 up` stack: 312 / 13 / 0.
+  - Default Testcontainers mode (`./build.ps1 test`, fresh Db2, SQL Server and Azurite): 312 / 13 / 0. (Phase 4 had run only the compose stack.)
+  - **UnitTests: 244 pass** (79 new: file filter and notes, CSV reader, policy table against the ADF JSON, the orchestrator on the in-process host with fakes, no driver-level retry).
+  - **AcceptanceTests: 81 cases; 68 pass, 13 fail** (one new class, `CardBlobStoreFaultTests`, 2 cases).
+- **The 13 failures**, each the `NotImplementedException` of a stub, identical on both stacks:
+  - AT-08 to AT-11 (4) and AT-12, AT-13 (2): they get past Extract and Card and stop at `PL_MapAndAggregate` (Phase 6).
+  - AT-14 to AT-16 (3) and the three AT-17 cases: `PL_Master_NightlyBatch` (Phase 8).
+  - AT-18 (1): `TR_Nightly_0300_Pacific` (Phase 8).
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Tests added:** `CardBlobStoreFaultTests` (acceptance): Azurite behind the fault proxy refuses one connection; the store fails on its first call and makes no second connection, while a default-SDK client (the positive control) absorbs the same fault. In compose mode the test spells out Azurite's published development account key, because the `UseDevelopmentStorage` shortcut cannot be pointed at a proxy port.
+
+**Differences from ADF a reviewer should know (all in ADR 0010):**
+- The pre-copy delete and the bulk insert share a transaction (ADF's are two steps), so a failed attempt leaves no partial rows.
+- Delete uses `DeleteIfExists`; ADF's behaviour on a missing file is unconfirmed.
+- An unreadable file (a quoted field that never closes, or a value over 200 characters) fails at once without retries; ADF would retry the Copy twice and then fail too. The file stays in the landing folder.
+- The ForEach starts no new iteration after a failure (as in Phase 4); ADF's behaviour is unconfirmed.
+- The row delimiter is LF only, as the dataset says. ADF's handling of CRLF with an explicit `\n` delimiter is not documented; here a CRLF file is quarantined. Empty lines are skipped and invalid UTF-8 bytes become U+FFFD, also unconfirmed against ADF.
+- The filter's case-insensitivity rests on ADR 0007's reading of ADF's `startsWith` and `endsWith`.
+
+**Notes for later phases:**
+- **Phase 6 and 7:** the Map and Recon tests now reach their own stubs. `core.CardSettlement` is what Recon compares; a card rerun leaves it unchanged.
+- **Phase 8:** a failed card ingest arrives as a `TaskFailedException`; a `CardFileDataException` shows as the inner failure's type. Sub-orchestrations need the `PipelineRunInput` with the master's instance ID as `BatchRunId`.
+- **Audit:** `ops.CardFileLog` is append-only. A retried `Log File …` activity whose first insert committed but whose reply was lost would add a second row (as ADF would).
+- **Azure deployment:** the container names and `RetainUntil` are `BlobStorage:*` settings; the connection string holds the account key and must come from Key Vault. A managed identity would need `BlobServiceClient` constructed from a URI instead of `AzureCardBlobStore`'s connection string.

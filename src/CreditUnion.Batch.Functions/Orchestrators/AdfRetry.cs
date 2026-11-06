@@ -1,3 +1,4 @@
+using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Extract;
 using Microsoft.DurableTask;
 
@@ -8,7 +9,8 @@ public static class AdfRetry
 {
     /// <summary>
     /// <c>retry + 1</c> attempts, a fixed interval (backoff coefficient 1). Failures that retrying cannot
-    /// fix are not retried: <see cref="ExtractDataException"/> (ADR 0005) and <see cref="ExtractConfigurationException"/>.
+    /// fix are not retried: <see cref="ExtractDataException"/> (ADR 0005), <see cref="ExtractConfigurationException"/>
+    /// and <see cref="CardFileDataException"/> (ADR 0010).
     /// </summary>
     public static TaskOptions Options(ActivityPolicy policy)
     {
@@ -23,6 +25,7 @@ public static class AdfRetry
     public static bool IsRetriable(TaskFailureDetails failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
-        return !failure.IsCausedBy<ExtractDataException>() && !failure.IsCausedBy<ExtractConfigurationException>();
+        return !failure.IsCausedBy<ExtractDataException>() && !failure.IsCausedBy<ExtractConfigurationException>()
+            && !failure.IsCausedBy<CardFileDataException>();
     }
 }

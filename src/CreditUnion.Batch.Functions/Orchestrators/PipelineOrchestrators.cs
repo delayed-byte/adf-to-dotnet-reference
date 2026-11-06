@@ -1,3 +1,4 @@
+using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Concurrency;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Pipelines;
@@ -64,12 +65,80 @@ public static class ExtractKeyStoneOrchestrator
         new(input.BatchRunId, input.BusinessDate, PipelineNames.Extract, status);
 }
 
-/// <summary>PL_IngestCardSettlement: input <see cref="PipelineRunInput"/>.</summary>
+/// <summary>
+/// PL_IngestCardSettlement: input <see cref="PipelineRunInput"/>. Mirrors the ADF activities in order: log Started,
+/// reset staging, list the landing folder, filter to settlement files, then per file (at most four at once, ADF
+/// <c>batchCount</c>) land it raw, validate it in SQL and either promote and archive it or write an error manifest
+/// and quarantine it, then merge into core and log Succeeded. Every I/O step is its own activity with the ADF
+/// activity's retry policy (ADR 0010); the pipeline has no failure branch, so a failure just throws.
+/// </summary>
 public static class IngestCardSettlementOrchestrator
 {
+    private static readonly CardActivityPolicies Policies = CardActivityPolicies.Adf;
+
     [Function(PipelineNames.CardSettlement)]
-    public static Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context) =>
-        throw new NotImplementedException($"{PipelineNames.CardSettlement} is not converted yet (docs/PRD.md, Phase 5).");
+    public static async Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var input = context.GetInput<PipelineRunInput>() ?? throw new InvalidOperationException($"{PipelineNames.CardSettlement} needs a PipelineRunInput.");
+        var logOptions = AdfRetry.Options(Policies.LogEvent);
+
+        // Log Card Ingest Started
+        await context.CallActivityAsync(CardActivityNames.LogEvent,
+            Event(input, "Started") with { StartedUtc = context.CurrentUtcDateTime }, logOptions);
+
+        // Reset Card Staging
+        await context.CallActivityAsync(CardActivityNames.ResetStaging, input, AdfRetry.Options(Policies.ResetStaging));
+
+        // List Landing Files, then Filter Settlement Files (pure: no activity)
+        var children = await context.CallActivityAsync<IReadOnlyList<LandingItem>>(
+            CardActivityNames.ListLandingFiles, input, AdfRetry.Options(Policies.ListLandingFiles));
+        var files = SettlementFileFilter.Select(children);
+
+        // For Each Settlement File (batchCount 4)
+        await BoundedParallel.ForEachAsync(files, CardActivityPolicies.BatchCount, file => ProcessFileAsync(context, input, file.Name));
+
+        // Merge Card Settlement To Core
+        await context.CallActivityAsync(CardActivityNames.Merge, input, AdfRetry.Options(Policies.Merge));
+
+        // Log Card Ingest Succeeded
+        await context.CallActivityAsync(CardActivityNames.LogEvent,
+            Event(input, "Succeeded") with
+            {
+                RecordCount = files.Count,
+                Notes = CardIngestNotes.ForFileCount(files.Count),
+                EndedUtc = context.CurrentUtcDateTime,
+            }, logOptions);
+    }
+
+    private static async Task ProcessFileAsync(TaskOrchestrationContext context, PipelineRunInput input, string fileName)
+    {
+        var file = new SettlementFileRequest(input.BusinessDate, input.BatchRunId, fileName);
+
+        // Copy File To Raw Staging, then Validate Settlement File
+        await context.CallActivityAsync<long>(CardActivityNames.CopyToRawStaging, file, AdfRetry.Options(Policies.CopyToRawStaging));
+        var validation = await context.CallActivityAsync<SettlementValidation>(CardActivityNames.Validate, file, AdfRetry.Options(Policies.Validate));
+        var logged = new LogCardFileRequest(file, validation);
+
+        // If File Valid
+        if (validation.IsValid)
+        {
+            await context.CallActivityAsync(CardActivityNames.Promote, file, AdfRetry.Options(Policies.Promote));
+            await context.CallActivityAsync(CardActivityNames.Archive, file, AdfRetry.Options(Policies.Archive));
+            await context.CallActivityAsync(CardActivityNames.DeleteArchived, file, AdfRetry.Options(Policies.DeleteArchived));
+            await context.CallActivityAsync(CardActivityNames.LogArchived, logged, AdfRetry.Options(Policies.LogArchived));
+        }
+        else
+        {
+            await context.CallActivityAsync(CardActivityNames.WriteManifest, file, AdfRetry.Options(Policies.WriteManifest));
+            await context.CallActivityAsync(CardActivityNames.Quarantine, file, AdfRetry.Options(Policies.Quarantine));
+            await context.CallActivityAsync(CardActivityNames.DeleteQuarantined, file, AdfRetry.Options(Policies.DeleteQuarantined));
+            await context.CallActivityAsync(CardActivityNames.LogQuarantined, logged, AdfRetry.Options(Policies.LogQuarantined));
+        }
+    }
+
+    private static LogBatchRunEventRequest Event(PipelineRunInput input, string status) =>
+        new(input.BatchRunId, input.BusinessDate, PipelineNames.CardSettlement, status);
 }
 
 /// <summary>PL_MapAndAggregate: input <see cref="PipelineRunInput"/>.</summary>

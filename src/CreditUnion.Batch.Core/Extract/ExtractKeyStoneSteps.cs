@@ -60,17 +60,6 @@ public sealed partial class ExtractKeyStoneSteps(
     [LoggerMessage(Level = LogLevel.Information, Message = "Merged KeyStone staging into core for {BusinessDate}.")]
     private partial void LogMerged(DateOnly businessDate);
 
-    private static async Task<T> WithTimeoutAsync<T>(string activity, TimeSpan timeout, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken)
-    {
-        using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        attempt.CancelAfter(timeout);
-        try
-        {
-            return await work(attempt.Token);
-        }
-        catch (OperationCanceledException) when (attempt.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException($"{activity} exceeded its ADF timeout of {timeout}.");
-        }
-    }
+    private static Task<T> WithTimeoutAsync<T>(string activity, TimeSpan timeout, Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken) =>
+        Pipelines.AttemptTimeout.RunAsync(activity, timeout, work, cancellationToken);
 }

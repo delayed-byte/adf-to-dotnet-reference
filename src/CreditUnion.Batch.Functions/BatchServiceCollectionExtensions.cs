@@ -1,11 +1,14 @@
+using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Configuration;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.KeyStone;
+using CreditUnion.Batch.KeyStone.Card;
 using CreditUnion.Batch.KeyStone.Reporting;
 using CreditUnion.Batch.KeyStone.Staging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace CreditUnion.Batch.Functions;
 
@@ -36,6 +39,17 @@ public static class BatchServiceCollectionExtensions
         services.TryAddSingleton<IExtractReportingStore, SqlExtractReportingStore>();
         services.TryAddSingleton<IKeyStoneStagingCopier, Db2StagingCopier>();
         services.TryAddSingleton<ExtractKeyStoneSteps>();
+
+        // PL_IngestCardSettlement: containers and retainUntil are configuration, not input (ADR 0008).
+        services.TryAddSingleton(CardActivityPolicies.Adf);
+        services.TryAddSingleton(provider =>
+        {
+            var blob = provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value;
+            return new CardSettlementSettings(blob.LandingContainer, blob.ArchiveContainer, blob.QuarantineContainer, blob.RetainUntil);
+        });
+        services.TryAddSingleton<ICardSettlementStore, SqlCardSettlementStore>();
+        services.TryAddSingleton<ICardBlobStore, AzureCardBlobStore>();
+        services.TryAddSingleton<CardSettlementSteps>();
         return services;
     }
 }
