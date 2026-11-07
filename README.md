@@ -6,6 +6,7 @@ A worked example of moving Azure Data Factory (ADF) pipelines to .NET C#. The se
 
 - It is a **reference implementation**. It is not production code.
 - All data is **synthetic**. The Db2 schema is invented. It is not KeyStone's licensed schema. The KeyBridge contract is a placeholder.
+- It is **not affiliated with or endorsed by** Corelation, IBM or Microsoft. Product names belong to their owners and are used only to describe the setting.
 - It demonstrates controls in line with NCUA expectations: a read-only extract login, separate writer and reader logins, masked logs, an append-only audit trail, and an evidence file for each run. **It does not claim compliance** with any regulation.
 - Nothing is deployed to Azure. Everything runs on one developer machine in Docker containers.
 - ADF could never be run here. The ADF JSON in `adf/` was written by hand, and the golden outputs were derived from it. An engineering review signed them off, not a business reviewer ([ADR 0007](docs/decisions/0007-golden-output-sign-off.md)). A business reviewer must confirm them before any go-live.
@@ -15,7 +16,7 @@ A worked example of moving Azure Data Factory (ADF) pipelines to .NET C#. The se
 On a machine that meets the prerequisites below:
 
 ```powershell
-git clone <repository-url> adf-to-dotnet-reference
+git clone https://github.com/delayed-byte/adf-to-dotnet-reference.git
 cd adf-to-dotnet-reference
 ./build.ps1 test
 ```
@@ -23,6 +24,8 @@ cd adf-to-dotnet-reference
 `./build.ps1 test` builds the solution, starts its own Db2, SQL Server and Azurite containers through Testcontainers, runs every test except the performance test, and stops the containers. It does **not** need `./build.ps1 up`.
 
 The first run pulls the container images (about 10 GB). That download was not timed, because the images were already present on the test machine.
+
+> **Third-party licenses.** `./build.ps1 test` and `./build.ps1 up` accept two vendor licenses on your behalf. `docker-compose.yml` sets `LICENSE=accept` for IBM Db2 Community Edition (`icr.io/db2_community/db2`) and `ACCEPT_EULA=Y` for SQL Server 2022 Developer Edition (`mcr.microsoft.com/mssql/server`). Testcontainers does the same. Read those licenses before you run either command. Both editions are for development and testing, not production.
 
 **How long it takes.** On the test machine (details under Commands), the run took 6 min 54 s from a fresh clone with the build already done. About 3 min 40 s of that is Db2 starting, measured from Docker events. The first build on a cold NuGet cache took 2 min 4 s on top.
 
@@ -35,8 +38,6 @@ Test run summary: Passed!
   succeeded: 652
   skipped: 0
 ```
-
-> **Known problem in the committed repository.** A fresh clone of commit `6229a3c` fails 34 of these 652 tests, because `.gitignore` excludes 11 test-data files. See the first item under "Known limitations" for the cause and the check that proved it. Until that is fixed, `./build.ps1 test` does not pass on a fresh clone. It passes in the working tree where the files exist.
 
 ## Prerequisites
 
@@ -206,14 +207,14 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 
 ## Known limitations and open items
 
-- **11 test-data files are not in git (found by the fresh-clone check).** `.gitignore` has the rules `evidence/` and `*.tmp`. They exclude the ten golden files `tests/TestData/golden/*/evidence/run-N.json` and the input file `tests/TestData/inputs/standard-day/blobs/card-landing/2026-11-04/settlement_004.csv.tmp`. `git ls-files` lists none of them. A fresh clone of `6229a3c` therefore fails 34 of 652 tests: the byte-for-byte drift tests, and every test that loads `standard-day` or an evidence file. Copying the 11 files into a fresh clone made all 652 pass, with none skipped. The fix is to add negation rules to `.gitignore` (for example `!tests/TestData/**/evidence/` and `!tests/TestData/**/*.tmp`) and commit the files. That is a repository change, so it was not made in the documentation phase. Remove this item when it is fixed.
 - **No OpenTelemetry export.** The PRD asks for traces in the Aspire dashboard. `Program.cs` adds no OpenTelemetry, so the dashboard shows no batch traces. The batch writes `ILogger` logs and .NET's own spans only. A follow-up needs an OTLP exporter, a `batchRunId` tag and a rule for correlating the Durable worker's spans.
 - **No Azure deployment.** The [deployment checklist](docs/migration-playbook.md#azure-deployment-checklist) lists what is open.
 - **Golden outputs are not business-reviewed.** See above and [tests/TestData/REVIEW.md](tests/TestData/REVIEW.md).
 - **Several ADF behaviours are unconfirmed.** The [playbook](docs/migration-playbook.md#differences-from-adf-and-items-to-verify) has the full checklist.
 - **No retain-until index tag.** Archived, quarantined and evidence blobs carry `retain_until` metadata (`TBD`), as ADF does. [ADR 0015](docs/decisions/0015-run-evidence-export.md) explains.
 - **Retention periods are open.** They come from the credit union's own records policy (`TBD`). Nothing deletes data automatically.
-- **Different libraries than the PRD names.** The code has no Dapper, CsvHelper or Polly (`Http.Resilience`). Plain `SqlClient`, an own CSV reader and the Durable `RetryPolicy` do those jobs. Polly was left out on purpose ([ADR 0008](docs/decisions/0008-acceptance-test-entry-points.md), [ADR 0012](docs/decisions/0012-keybridge-web-activity-and-mapping-cache.md)). No ADR records why Dapper and CsvHelper were skipped.
+- **Different libraries than the PRD names.** The code has no Dapper, CsvHelper or Polly (`Http.Resilience`). Plain `SqlClient`, an own CSV reader and the Durable `RetryPolicy` do those jobs. Polly was left out on purpose ([ADR 0008](docs/decisions/0008-acceptance-test-entry-points.md), [ADR 0012](docs/decisions/0012-keybridge-web-activity-and-mapping-cache.md)). Dapper and CsvHelper were skipped without a recorded reason. [ADR 0018](docs/decisions/0018-no-dapper-or-csvhelper.md) records the choice after the fact and is still Proposed.
+- **The Db2 secret is not decided.** ADF keeps only the Db2 password in Key Vault, but the code needs a whole connection string. [ADR 0019](docs/decisions/0019-keystone-db2-secret.md) proposes keeping the password secret and adding a `KeyStoneDb2:Password` setting. That needs a code change and approval.
 - **The performance figure is one run.** 1,052,000 rows extracted in 46.3 s on a development machine, against the 100,000 rows per minute minimum.
 - **Known data limitation.** A rerun does not carry a source correction that changes only trailing spaces or letter case ([ADR 0005](docs/decisions/0005-db2-type-handling.md)).
 - **Two masters for one date at the same time** are not prevented. They are only unlikely, because the timer is a singleton ([ADR 0016](docs/decisions/0016-nightly-trigger-time-zone-and-missed-fires.md)).
@@ -223,7 +224,7 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 
 | Symptom | Cause and fix |
 | --- | --- |
-| Db2 takes minutes to start, or the container is killed | Db2 needs about 4 GB and one to three minutes. Give WSL at least 8 GB (see Prerequisites). `./build.ps1 up` waits up to 10 minutes for healthy containers. |
+| Db2 takes minutes to start, or the container is killed | Db2 needs about 4 GB and several minutes (3 min 40 s measured under Testcontainers, about 3 min under `up`). Give WSL at least 8 GB (see Prerequisites). `./build.ps1 up` waits up to 10 minutes for healthy containers. |
 | Port already in use | `up` publishes 50000 (Db2), 14330 (SQL Server), 10000 to 10002 (Azurite), 8081 (WireMock), 18888 and 4317 (dashboard). Stop whatever uses them. `./build.ps1 test` without `CU_TESTS_USE_COMPOSE` uses random ports, apart from the fault proxy's `127.0.0.1:15600-15615`. |
 | `error MSB3030: Could not copy the file ... because it was not found` during the build | The clone path is too long. Move the repository to a short path (see Prerequisites). |
 | `The process cannot access the file ... because it is being used by another process`, or "file is locked by .NET Host" | An old build server or test host holds a DLL. Run `dotnet build-server shutdown`, stop any running `func start`, and try again. |
@@ -240,10 +241,14 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 | --- | --- |
 | [docs/PRD.md](docs/PRD.md) | Scope, requirements, build phases, definition of done |
 | [docs/migration-playbook.md](docs/migration-playbook.md) | How a credit union takes one real ADF pipeline through this process; deployment checklist; traceability of every ADF activity |
-| [docs/decisions/](docs/decisions/) | One ADR per significant decision (0001 to 0017) |
+| [docs/decisions/](docs/decisions/) | One ADR per significant decision (0001 to 0019) |
 | [docs/progress.md](docs/progress.md) | What each build phase did, tested and left open |
 | [adf/](adf/) | The ADF JSON, the source of truth for behaviour |
 | [db/](db/) | The synthetic Db2 schema and the SQL Server reporting store |
 | [contracts/](contracts/) | The KeyBridge placeholder contract and the card settlement file format |
 | [tests/TestData/README.md](tests/TestData/README.md) | Scenarios, inputs, golden outputs |
 | [CLAUDE.md](CLAUDE.md) | Rules for AI coding assistants working in the repository (also in [AGENTS.md](AGENTS.md)) |
+
+## License
+
+[MIT](LICENSE). The container images that the build starts carry their own licenses (see "Third-party licenses" above).

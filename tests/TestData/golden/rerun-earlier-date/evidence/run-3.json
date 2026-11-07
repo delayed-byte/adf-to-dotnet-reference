@@ -1,0 +1,147 @@
+[
+  {
+    "section": "RowCounts",
+    "item": "core.PostedTransaction",
+    "value": "150"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.Account",
+    "value": "28"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.GlEntry",
+    "value": "15"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.CardSettlement",
+    "value": "52"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.DailyGlTotals",
+    "value": "9"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.PostedTransaction",
+    "value": "3D4A4937372951182BEF7A83503DD40DC402BC238BB3D09BF48984570270B145"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.Account",
+    "value": "DC5D2F7387312CCB3BD31FD29B1E4AB069D584310A2D4FB99137874221B855CD"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.GlEntry",
+    "value": "964AB875D830A238EF2CE1C54B292040C59C656694AEF13D67E3517B3B671E92"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.CardSettlement",
+    "value": "724F5918EF298E58A1B70FC08A2CFD0580F3FC6AE76715007F92343D89272B37"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.DailyGlTotals",
+    "value": "B9FC05A32307762122B83C69372D56283A32D522E736104BF2107D7DB739E003"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "CardSettlement",
+    "value": "settlement=3472.33; keystone=3472.33; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:CREDIT",
+    "value": "derived=4414.21; keystone=4414.21; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:DEBIT",
+    "value": "derived=14393.35; keystone=14393.35; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1020:CREDIT",
+    "value": "derived=2660.00; keystone=2660.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1020:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1110:CREDIT",
+    "value": "derived=17009.94; keystone=17009.94; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1110:DEBIT",
+    "value": "derived=24704.35; keystone=24704.35; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:CREDIT",
+    "value": "derived=2723.07; keystone=2723.07; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:CREDIT",
+    "value": "derived=39244.48; keystone=39244.48; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:DEBIT",
+    "value": "derived=31033.10; keystone=31033.10; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2400:CREDIT",
+    "value": "derived=3520.33; keystone=3520.33; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2400:DEBIT",
+    "value": "derived=48.00; keystone=48.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:CREDIT",
+    "value": "derived=480.55; keystone=480.55; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4300:CREDIT",
+    "value": "derived=225.00; keystone=225.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4300:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/5100:CREDIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/5100:DEBIT",
+    "value": "derived=98.78; keystone=98.78; difference=0.00"
+  }
+]

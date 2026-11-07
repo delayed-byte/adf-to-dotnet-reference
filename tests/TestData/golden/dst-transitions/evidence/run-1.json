@@ -1,0 +1,142 @@
+[
+  {
+    "section": "Files",
+    "item": "settlement_001.csv",
+    "value": "Archived; detailRows=11; trailerRows=11; errors=-"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.PostedTransaction",
+    "value": "42"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.Account",
+    "value": "7"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.GlEntry",
+    "value": "12"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.CardSettlement",
+    "value": "11"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.DailyGlTotals",
+    "value": "8"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.PostedTransaction",
+    "value": "1F241C283813CAD83376377A08BC3DD1F6C7F006397314F766DE029A9D1451E8"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.Account",
+    "value": "DF375243676F3576365B09074A0449C9A22DCE74589A9D2E7F401EB6339EBFD2"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.GlEntry",
+    "value": "1859179081325FC81AEF21976DD6CE01F7FC991B1132E4216B0AA4D9FECA83F2"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.CardSettlement",
+    "value": "7B96ED2E2B0D951B77CA75D71ED286A0646D4DC07301D39E9D9D44BD43552B7D"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.DailyGlTotals",
+    "value": "623C7A425AF069D82AF0245B1F8620E06E9E2CEE34820B0A6B7342DB78108DCF"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "CardSettlement",
+    "value": "settlement=338.77; keystone=338.77; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:CREDIT",
+    "value": "derived=687.31; keystone=687.31; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:DEBIT",
+    "value": "derived=4398.12; keystone=4398.12; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1020:CREDIT",
+    "value": "derived=1340.00; keystone=1340.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1020:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1110:CREDIT",
+    "value": "derived=7409.40; keystone=7409.40; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1110:DEBIT",
+    "value": "derived=4917.61; keystone=4917.61; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:CREDIT",
+    "value": "derived=2389.23; keystone=2389.23; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:CREDIT",
+    "value": "derived=9392.13; keystone=9392.13; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:DEBIT",
+    "value": "derived=12613.73; keystone=12613.73; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2400:CREDIT",
+    "value": "derived=366.16; keystone=366.16; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2400:DEBIT",
+    "value": "derived=27.39; keystone=27.39; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:CREDIT",
+    "value": "derived=421.63; keystone=421.63; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/5100:CREDIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/5100:DEBIT",
+    "value": "derived=49.01; keystone=49.01; difference=0.00"
+  }
+]

@@ -546,7 +546,7 @@
 - The ADF columns of the traceability table were generated from the JSON by a script. The .NET and ADR columns were written by hand from the ADRs.
 
 **Fresh-clone walkthrough (the PRD gate).**
-- **Setup:** `git clone` of HEAD (`6229a3c`) into `C:\src\cu-clean`: no `.env`, no `bin` or `obj`. The uncommitted Phase 9 files were copied over it. A new NuGet package folder (`NUGET_PACKAGES=C:\src\nuget-cold`) emulated a machine that had never restored the repo. The dev stack was stopped, so the Testcontainers run was timed alone.
+- **Setup:** `git clone` of HEAD (`5607c18`) into `C:\src\cu-clean`: no `.env`, no `bin` or `obj`. The uncommitted Phase 9 files were copied over it. A new NuGet package folder (`NUGET_PACKAGES=C:\src\nuget-cold`) emulated a machine that had never restored the repo. The dev stack was stopped, so the Testcontainers run was timed alone.
 - **What the README did not say, and now does:**
 
   | # | Found | Change |
@@ -610,3 +610,23 @@
 5. **OpenTelemetry export** is still not implemented (recorded in Phase 8).
 6. **Long clone paths** break the build (above).
 7. **No CI.**
+
+## Phase 9 follow-up – loose ends (2026-11-06)
+
+Done after commit `3a5b65d`, at the owner's request ("fix whatever you can"). No change to `src`, the acceptance tests, golden files, the ADF JSON or the harness.
+
+Commit hashes in this file refer to the history after the author email was changed to the GitHub noreply address (same day, before publishing). Every commit kept its content, message and dates.
+
+- **`.gitignore` defect fixed.** Two rules at the end of `.gitignore`, `!tests/TestData/golden/**/evidence/` and `!tests/TestData/inputs/**/*.tmp`, make the 11 missing test-data files visible to git. `git status` showed exactly those 11 and nothing else. They contain only LF (no CR, no NUL), as `.gitattributes` expects for test data, and no secrets or card numbers.
+  - **Round-trip check:** the change and the files were committed in a scratch clone (not this repository), and that clone was cloned again. All 11 files were byte-identical after the round trip. `./build.ps1 test` in the second clone (Testcontainers, no `bin` or `obj`): **652 passed, 0 failed, 0 skipped, 8 min 31 s including the first build.**
+  - The README's "Known problem" note and its first "Known limitations" item were removed. They are true again only if the 11 files are not committed together with `.gitignore`.
+- **ADR 0018** (Proposed, retrospective) records that the code uses plain `SqlClient` and `SettlementCsvReader` rather than Dapper and CsvHelper. It says plainly that the original reason was not recorded, and gives only reasons visible in the code. It lists, as not tested, whether CsvHelper could reproduce the ADR 0010 cases.
+- **ADR 0019** (Proposed) sets out the Db2 secret options. It recommends keeping `keystone-db2-extract-password` and adding a `KeyStoneDb2:Password` setting, a code change that needs approval. It also records a gap not written down before: the ADF linked service uses TLS for Db2 (port 50001, `certificateCommonName`), the .NET connection string sets no TLS keywords, and Db2 TLS was never tested.
+- README, playbook mapping table and deployment checklist now point to ADR 0018 and 0019. The README's Db2 start-up time in Troubleshooting now matches the measured figure.
+- `DocumentationConsistencyTests` 5 of 5 pass, and `./build.ps1 scan` found no leaks.
+
+**Status changes for the Phase 9 definition of done:**
+- All acceptance tests pass from a fresh clone: **met once the 11 files and `.gitignore` are committed.** Proven in a scratch round trip, not yet in this repository's history.
+- README, playbook and ADRs: the Dapper/CsvHelper gap now has an ADR, still Proposed. OpenTelemetry remains a gap.
+
+**Still open:** business sign-off of golden outputs (ADR 0007); approval of ADR 0018 and ADR 0019; immutability versus overwrite; retention period; retain-until index tag; OpenTelemetry export (needs approval to change `src`); CI (the repository has no remote); Azure deployment; long clone paths.

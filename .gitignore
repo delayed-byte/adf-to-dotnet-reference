@@ -391,3 +391,11 @@ __queuestorage__/
 __azurite_db*__.json
 azurite/
 .azurite/
+
+# ---------------------------------------------------------------------------
+# Test data that the broad rules above would hide. Keep these last: the last
+# matching rule wins. Without them a fresh clone lacks the golden evidence
+# files and the standard-day ".tmp" input, and 34 tests fail (progress.md, Phase 9).
+# ---------------------------------------------------------------------------
+!tests/TestData/golden/**/evidence/
+!tests/TestData/inputs/**/*.tmp

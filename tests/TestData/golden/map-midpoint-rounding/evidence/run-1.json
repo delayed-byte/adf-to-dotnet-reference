@@ -1,0 +1,97 @@
+[
+  {
+    "section": "RowCounts",
+    "item": "core.PostedTransaction",
+    "value": "13"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.Account",
+    "value": "2"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.GlEntry",
+    "value": "8"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.CardSettlement",
+    "value": "0"
+  },
+  {
+    "section": "RowCounts",
+    "item": "core.DailyGlTotals",
+    "value": "4"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.PostedTransaction",
+    "value": "BE9118724DA7AA62C89721D29300ACA1450BAAEEAE2DEE06A70FB5304036A048"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.Account",
+    "value": "BF13B18768B7DDA86B5C7CB995CC1D8C2DE2C906DDC6430D03302185A49B2B44"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.GlEntry",
+    "value": "56996E1A38428E82F019F1A3B4E7636D2508EC0BC7548C172DAFB942907701B9"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.CardSettlement",
+    "value": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+  },
+  {
+    "section": "Checksums",
+    "item": "core.DailyGlTotals",
+    "value": "9E58FFC774894C6CDE9DB0F2245FEE4655D0CC848316BE5CA728D1BBA96AD8CC"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "CardSettlement",
+    "value": "settlement=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:CREDIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1010:DEBIT",
+    "value": "derived=1000.00; keystone=1000.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:CREDIT",
+    "value": "derived=16.30; keystone=16.30; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/1300:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:CREDIT",
+    "value": "derived=1000.00; keystone=1000.00; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/2100:DEBIT",
+    "value": "derived=21.73; keystone=21.73; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:CREDIT",
+    "value": "derived=5.43; keystone=5.43; difference=0.00"
+  },
+  {
+    "section": "Reconciliation",
+    "item": "GeneralLedger/4100:DEBIT",
+    "value": "derived=0.00; keystone=0.00; difference=0.00"
+  }
+]
