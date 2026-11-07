@@ -532,3 +532,81 @@
   - `traceInputsAndOutputs` false; secrets never cross Durable boundaries; exception messages carry no values; mask numbers with `LogMask`.
   - AT-17 scans logs, spans and failure details through the master; the real host's own logs were scanned in the `func start` check.
 - **Determinism:** the analyzer rules are build errors, and `ReplayBackend` and `ReplayCheck` are the pattern for replay-testing any new orchestrator.
+
+## Phase 9 – Document (2026-11-06)
+
+**Delivered (documentation and one test; no change to `src`, the acceptance tests, golden files, ADF JSON or the harness):**
+- `README.md`, rewritten for a reviewer who has never seen the repo: what it is and is not, prerequisites with versions, the one command, every `build.ps1` command with measured times, the fast loop, running under `func start`, what AT-01 to AT-19 prove, known limitations, troubleshooting, a documentation map.
+- `docs/migration-playbook.md`: the mapping, the five-step process with "here" and "at the credit union" for each step, 16 pattern sections (decision, reason, pitfall found), a checklist of every "difference from ADF" and "unconfirmed against ADF" item, an Azure deployment checklist, and the traceability table (61 rows: every activity in `adf/pipeline/*.json`, nested ones included) plus a table for the other ADF resources.
+- `tests/CreditUnion.Batch.UnitTests/Docs/DocumentationConsistencyTests.cs` (5 tests, no new package):
+  - each ADF activity has exactly one traceability row, and each row's type and policy equal the ADF JSON, and it names an implementation and an existing ADR;
+  - every relative link in `README.md` and `docs/**/*.md` resolves, including heading anchors;
+  - every `./build.ps1 <command>` and switch in the README exists in `build.ps1`, and every command is documented.
+- Mutation check of the new test: deleting a row, changing a policy, a broken link, a broken anchor, an unknown command and an unknown switch each failed it.
+- The ADF columns of the traceability table were generated from the JSON by a script. The .NET and ADR columns were written by hand from the ADRs.
+
+**Fresh-clone walkthrough (the PRD gate).**
+- **Setup:** `git clone` of HEAD (`6229a3c`) into `C:\src\cu-clean`: no `.env`, no `bin` or `obj`. The uncommitted Phase 9 files were copied over it. A new NuGet package folder (`NUGET_PACKAGES=C:\src\nuget-cold`) emulated a machine that had never restored the repo. The dev stack was stopped, so the Testcontainers run was timed alone.
+- **What the README did not say, and now does:**
+
+  | # | Found | Change |
+  | --- | --- | --- |
+  | 1 | The first clone sat in a deeply nested temporary folder, and `./build.ps1 build` failed with `MSB3030: Could not copy the file ... because it was not found`. The path was 279 characters, over Windows' 260. The same clone built at `C:\src\cu-clean`. The longest path found is 169 characters below the repo root, so the root must stay under about 90 characters. | Prerequisites and troubleshooting require a short clone path. Long-path support was not tried. |
+  | 2 | `func durable start-new` fails ("Unable to find project root") outside `src/CreditUnion.Batch.Functions`. | The README says to run it from that folder. |
+  | 3 | After `up` and `seed`, Db2 holds only reference data, so a manual run processes an empty day. | The README adds a step that loads `standard-day` by running AT-02 against the stack (13 s), and says what the run then shows. |
+  | 4 | Nothing said how to read the evidence blob. | A PowerShell Shared Key snippet with Azurite's published development key. It was extracted from the README and run verbatim. |
+  | 5 | My first `ops.BatchRun` query ordered by column 1, a GUID. | Ordered by `BatchRunEventId`. The final query was run through `docker exec` as `cu_report_reader`. |
+  | 6 | Db2 took 3 min 43 s to be ready under Testcontainers (container start 17:12:27, readiness polling ended 17:16:11). The PRD says one to three minutes. | Troubleshooting and the timings table state the measured figures. |
+  | 7 | The stub README promised traces in the Aspire dashboard. The batch exports none. | Corrected, and listed as a gap. |
+
+- **Not fixed, because it changes the repository: the fresh clone failed 34 of 652 tests** (618 passed, 0 skipped; 7 min 59 s including the build).
+  - Cause: `.gitignore` excludes `evidence/` and `*.tmp`, so ten golden files (`tests/TestData/golden/*/evidence/run-N.json`) and `tests/TestData/inputs/standard-day/blobs/card-landing/2026-11-04/settlement_004.csv.tmp` were never committed. `git ls-files | grep evidence/` lists nothing.
+  - Failing tests: the six drift tests (`GoldenFilesTests`), and every test that loads `standard-day` or an evidence file, such as AT-01, AT-02, AT-04, AT-05, AT-08, AT-11, AT-12, AT-14, AT-16, AT-17 and AT-18, and the golden consistency tests.
+  - Diagnosis check: the 11 files were copied from the working tree into the clone. Then **652 of 652 passed, 0 skipped**, in 6 min 54 s (`./build.ps1 test`, Testcontainers).
+  - Proposed fix, for approval: add `!tests/TestData/**/evidence/` and `!tests/TestData/**/*.tmp` to `.gitignore`, and commit the 11 files. The README states the problem under "Known limitations"; remove that note when it is fixed. Phase 8's 647 passes ran in the working tree, where the files exist, so they could not see this.
+- **Also checked, in the working tree against the stack:**
+  - `./build.ps1 run` started the host. `func durable start-new` for 2026-11-04 completed with 17 `ops.BatchRun` events (three settlement files, 1,857 rows, Reconciled, evidence written).
+  - The timer function, run through the admin endpoint (HTTP 202), started a master for 2026-11-05.
+  - The evidence blob read back with HTTP 200, `retain_until` = `TBD`, 51 entries.
+  - The host log (32,756 lines) contained none of the four secrets used.
+- **What this cannot prove:**
+  - winget installs: the package IDs and current versions were checked with `winget show`; nothing was installed.
+  - Docker Desktop setup and the WSL memory setting on a new machine. This machine has no `.wslconfig` and Docker gets 15.5 GB by default, so the 8 GB advice comes from the PRD and was not tested.
+  - A first image pull. All images were already present.
+  - A machine with a different execution policy, drive, user or Windows version. The npm route for Core Tools was not repeated (Phase 8 recorded it).
+  - `./build.ps1 up` and `run` were followed in the working tree, not in the clone, because the clone shares fixed container names with the dev stack. `up` was timed after `docker compose down`: images and volumes present, Db2 empty.
+  - The cold NuGet cache was emulated with a separate package folder, on a machine with network access.
+
+**Gate:**
+- **Docs complete:** README and playbook cover the required items. The consistency test passes (5 tests).
+- **Build:** `./build.ps1 build` is clean, warnings as errors, in the working tree and in the fresh clone (124 s on a cold cache).
+- **Full suite, no `Category=Performance`: 652 tests (Phase 8's 647 plus 5 new), 0 skipped.**
+
+  | Where | Result | Time |
+  | --- | --- | --- |
+  | Fresh clone of the committed repo, Testcontainers | 618 pass, **34 fail** (the `.gitignore` defect) | 7 min 59 s with the build |
+  | Fresh clone plus the 11 files, Testcontainers | 652 pass, 0 fail | 6 min 54 s |
+  | Working tree, `CU_TESTS_USE_COMPOSE=1`, stack freshly started | 652 pass, 0 fail | 3 min 38 s |
+
+  The gate "the full suite passes once from the fresh clone" is therefore met only with the 11 files.
+- **Performance test** (`./build.ps1 test -Performance`, against the stack): the test passed, so it met the assertion of at least 100,000 rows per minute. The whole command took 5 min 24 s (324 s) against the running stack. The test prints its rate only when it fails, so no new rate was recorded; the last recorded figure is Phase 4's 1,052,000 rows in 46.3 s (1,361,948 rows per minute).
+- **Scans:** `./build.ps1 scan` (gitleaks) found no leaks (20 s). `dotnet list package --vulnerable --include-transitive` found none in any project. Both ran in the working tree, after the Phase 9 files were written.
+
+**Definition of done (PRD):**
+
+| Item | Status |
+| --- | --- |
+| All acceptance tests AT-01 to AT-19 pass, none skipped, two consecutive runs | **Met in the working tree** (Phase 8: two runs on each stack; Phase 9: two more full runs, 652 of 652). **Not met from a fresh clone of the committed repo** until the `.gitignore` defect is fixed (34 failures). |
+| Golden outputs signed off by a person who knows the business rules | **Not met.** An engineering review signed them off (ADR 0007). A business reviewer must confirm the four decisions, and real ADF output must be compared, before go-live. |
+| Secret scan, vulnerability scan and analyzers pass | **Met** (see Scans; the analyzers run as build errors). |
+| README, migration playbook and ADRs complete | **Met, with two gaps:** no ADR records why Dapper and CsvHelper (named in the PRD) are not used; and OpenTelemetry export (a PRD requirement) is not implemented, which is documented as a gap. |
+| Every ADF activity traced to its .NET implementation in the playbook | **Met.** 61 activities, checked by `DocumentationConsistencyTests`. |
+
+**Open items and risks found while writing (decisions for the repository owner):**
+1. **The `.gitignore` defect** above: it needs a decision to fix and commit.
+2. **No ADR for Dapper and CsvHelper.** The code uses plain `SqlClient` and an own CSV reader. The reason was never written down, so the docs say so and do not invent one.
+3. **Immutability versus overwrite (unverified).** Evidence, archive and quarantine writes overwrite a blob of the same name on a retry (ADR 0010, ADR 0015). A container immutability policy, which ADR 0015 suggests for examiners, would likely refuse that overwrite. It was not tested; Azurite has no such policy. The deployment checklist lists it.
+4. **Db2 secret name.** The ADF JSON stores only the Db2 password in Key Vault, but the .NET options need a full connection string. No ADR decides how to store it.
+5. **OpenTelemetry export** is still not implemented (recorded in Phase 8).
+6. **Long clone paths** break the build (above).
+7. **No CI.**
