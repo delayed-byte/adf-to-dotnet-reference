@@ -2,11 +2,13 @@ using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Configuration;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Map;
+using CreditUnion.Batch.Core.Master;
 using CreditUnion.Batch.Core.Reconciliation;
 using CreditUnion.Batch.KeyStone;
 using CreditUnion.Batch.KeyStone.Card;
 using CreditUnion.Batch.KeyStone.KeyBridge;
 using CreditUnion.Batch.KeyStone.Map;
+using CreditUnion.Batch.KeyStone.Master;
 using CreditUnion.Batch.KeyStone.Reconciliation;
 using CreditUnion.Batch.KeyStone.Reporting;
 using CreditUnion.Batch.KeyStone.Staging;
@@ -68,6 +70,14 @@ public static class BatchServiceCollectionExtensions
         services.TryAddSingleton<IReconciliationStore, SqlReconciliationStore>();
         AddReconAlertClient(services);
         services.TryAddTransient<ReconciliationSteps>();
+
+        // PL_Master_NightlyBatch (ADR 0014, ADR 0015): the children are sub-orchestrations; the master's own activities log its
+        // events and export the run evidence. The evidence container is configuration (BlobStorageOptions.EvidenceContainer).
+        services.TryAddSingleton(MasterActivityPolicies.Adf);
+        services.TryAddSingleton(provider => new NightlyBatchSettings(provider.GetRequiredService<IOptions<BlobStorageOptions>>().Value.EvidenceContainer));
+        services.TryAddSingleton<INightlyBatchStore, SqlNightlyBatchStore>();
+        services.TryAddSingleton<IEvidenceBlobStore, AzureEvidenceBlobStore>();
+        services.TryAddTransient<NightlyBatchSteps>();
         return services;
     }
 

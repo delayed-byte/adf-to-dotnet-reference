@@ -1,5 +1,10 @@
 {
   "version": "2.0",
   "logging": { "logLevel": { "default": "Information" } },
-  "extensions": { "durableTask": { "hubName": "CreditUnionBatch" } }
+  "extensions": {
+    "durableTask": {
+      "hubName": "CreditUnionBatch",
+      "tracing": { "traceInputsAndOutputs": false, "traceReplayEvents": false }
+    }
+  }
 }

@@ -396,3 +396,139 @@
   - The evidence export (`ops.usp_GetRunEvidence`) reads `ops.ReconExceptions` including `alertSentUtc` (`-` when the alert was never sent, as after a failed POST).
 - **Webhook redaction:** AT-17's three cases run the same recon path through the master. The client already has no span or HTTP logger, so they need nothing more here, but keep host logging of activity inputs off (the alert summary is an activity input).
 - **Azure deployment:** `ReconAlertWebhook:Url` must come from Key Vault (secret `recon-alert-webhook-url`) as an app-setting reference or a configuration provider. A URL that is not absolute http(s) is refused at the first alert.
+
+## Phase 8 – Orchestrate (2026-11-06)
+
+**Implemented (`PL_Master_NightlyBatch`, body of `NightlyBatchOrchestrator`; `TR_Nightly_0300_Pacific`, body of `NightlyBatchTrigger`; ADR 0014 to ADR 0017):**
+- **The master** mirrors the ADF activities, order, dependencies and conditions, which `MasterPolicyTests` reads from the JSON:
+  - Resolve Business Date: a pure function, `BusinessCalendar.Resolve`.
+  - Log Batch Started, with Notes `trigger=…; triggerTimeUtc=…`.
+  - Extract and Card Settlement as parallel sub-orchestrations (`Task.WhenAll`).
+  - Map after both; Reconciliation after Map, with `reconTolerance`.
+  - Export Run Evidence; Log Batch Succeeded, with the evidence path as ObjectName.
+  - Five failure branches ("Log Failed At …" then "Fail At …").
+- **Children:** each gets `PipelineRunInput` or `ReconciliationInput` with the master's instance ID as `BatchRunId`, and the instance ID `{batchRunId}:{pipeline}`. The name, input, output and instance-ID rule are unchanged (ADR 0008).
+- **Failure branches** (`StepFailure`, Core):
+  - The Failed event carries the step name and the child's code: `TXN_CODE_UNMAPPED` via `PipelineFailedException.TryParse`, otherwise the root cause's type name (e.g. `DB2Exception`). The message is the child's.
+  - The master fails with `BATCH_STEP_FAILED: {step} failed: {message}`, with the child's chain as the inner failure. No later step runs.
+  - If the Failed event cannot be logged, the master still fails (the Fail activity's `Completed` dependency).
+  - If both parallel children fail, both Failed events are logged and the master names Extract.
+  - An undeliverable reconciliation alert fails the batch at Reconciliation.
+- **Evidence export** (`Master_ExportRunEvidence`; `RunEvidenceFile` and `NightlyBatchSteps` in Core; `SqlNightlyBatchStore` and `AzureEvidenceBlobStore` in KeyStone):
+  - `ops.usp_GetRunEvidence` is streamed with `SequentialAccess` through `Utf8JsonWriter` into staged blocks, which are committed with `retain_until` metadata only when complete.
+  - The file is `{EvidenceContainer}/{date}/batch-run-{runId}.json`, an array of `{section, item, value}` in the procedure's order, UTF-8 without BOM.
+  - A new run ID writes a new file; the same run ID (a retry) overwrites with a complete one.
+- **The trigger** reads the fire time from the injected `TimeProvider` and maps it to the latest 03:00 Pacific at or before it (5 minutes' early tolerance when on time, none when past due, `NightlySchedule`). It starts one master per invocation under a new GUID, with `BusinessDate` = the previous Pacific day, `TriggerName` and `TriggerTimeUtc` = the occurrence. It logs a warning when past due.
+  - Signature change: the trigger gained a `FunctionContext` parameter, to reach the `TimeProvider` and the logger. Its name, schedule and other bindings are unchanged.
+- **Determinism:** the orchestrators do no I/O and read time only from `context.CurrentUtcDateTime`. The Durable analyzer is live: probes of `DateTime.UtcNow`, `Guid.NewGuid`, `Task.Delay`, environment variables and the HTTP, SQL and Blob clients each failed the build (DURABLE0001 to 0006). `File.Exists` was not flagged. The replay test is ADR 0017.
+- **Log hygiene:** `host.json` sets `durableTask.tracing.traceInputsAndOutputs` and `traceReplayEvents` to false; a unit test reads the file. Orchestrator logs carry the step, code, error type and date only.
+- **Retries:** `AdfRetry` on every activity call (3 attempts, 30 s; timeouts 5 and 10 min). The sub-orchestrations have no retry, because the Execute Pipeline activities have no policy. `RunEvidenceInputException` is not retried. No Polly; the Storage SDK and SqlClient retries stay off.
+- **No new package.** The replay test uses `Microsoft.DurableTask.Worker.Grpc` and `Microsoft.DurableTask.Grpc` 1.27.0, already in the graph through the Durable worker extension.
+
+**Harness fix (approved):** `LogCaptureAndPolicyTests.Findings_cover_…` now counts only spans from its own `ActivitySource`. It drops findings about other sources' spans and numbers the expected span by its real position, so a concurrent test's HTTP span can no longer shift `span #1`. The assertions on logs, host text, the secret and the numbers are unchanged. No acceptance test, golden file or in-process host file was edited.
+
+**Decisions and ADRs:**
+- **ADR 0014:** activity mapping; failure propagation and the child's error code (root-cause type when there is no ADF code); a failed Failed-event log; both parallel children failing; steps without a failure branch; an alert failure fails the batch; no retry on sub-orchestrations; log hygiene through sub-orchestrations.
+- **ADR 0015:** the evidence format and path; `retain_until` as metadata, not an index tag (ADR 0004's index-tag sentence was never implemented and is now marked superseded); all-or-nothing staged-block commit; idempotency (new ID: new file; same ID: overwrite).
+- **ADR 0016:** `WEBSITE_TIME_ZONE`; occurrence and business-date rule; `TriggerTimeUtc` is the occurrence; missed fires (one past-due run, no back-fill, a runbook); duplicate fires and reruns of a processed date (allowed, not deduplicated, risks stated); manual start without an HTTP starter.
+- **ADR 0017:** analyzer rules plus a replay test on the worker's own engine, and what it does and does not prove.
+
+**Determinism and replay check (ADR 0017):**
+- `ReplayBackend` runs all five orchestrators episode by episode through `GrpcOrchestrationRunner.LoadAndRun`, the isolated worker's real replay path, and records genuine Durable histories. `ReplayCheck` replays every episode 30 ms later, and the final history twice more, and requires identical actions.
+- Scenarios: a successful batch (quarantined file, retried alert with a durable timer) and a failed one (Extract retried, Map TXN_CODE_UNMAPPED, master BATCH_STEP_FAILED on the real engine).
+- Controls: a wall-clock input is caught; a branch on changing state is rejected by the engine (`NonDeterministicOrchestrationException`); a context-only orchestrator passes.
+- Mutation check: a hidden static counter in the master failed the test at episode 1. It was reverted.
+- It does not prove unscripted paths, non-determinism that yields the same value twice, or the Functions extension's own wrapper (the `func start` check covered that once).
+
+**`func start` check (what was run and seen):**
+- Azure Functions Core Tools was not installed. With approval it was installed with `npm i -g azure-functions-core-tools@4`. The package's post-install step downloaded the 4.16.0 zip but did not extract it under Node 24, so the zip was extracted by hand into `%APPDATA%\npm\node_modules\azure-functions-core-tools\bin`. `%APPDATA%\npm` is not on PATH; it was added for the session.
+- **Stack and settings:** `./build.ps1 up` was already running. `./build.ps1 run` was started with settings as environment variables taken from `.env` (`KeyStoneDb2__ConnectionString` as ksextract, `ReportingSql__ConnectionString` as cu_batch_writer, `BlobStorage__ConnectionString=UseDevelopmentStorage=true`, KeyBridge on the compose WireMock at `http://localhost:8081/api`, a webhook URL on the same WireMock).
+- **Host start:**
+  - The host started (Core Tools 4.16.0, runtime 4.1054) and indexed all 37 functions.
+  - It printed the next occurrences of `TR_Nightly_0300_Pacific` as `11/07/2026 03:00:00-08:00 (11/07/2026 11:00:00Z)`, confirming the schedule is evaluated in Pacific time.
+- **Manual run:**
+  - The command was `func durable start-new --function-name PL_Master_NightlyBatch --id 83bd62b3-c425-4042-9947-482c5418d474 --input @input.json --task-hub-name CreditUnionBatch`, with the input `{"BusinessDate":"2026-11-04"}`. The DB held `standard-day` with Extract not yet merged.
+  - The run **completed**. The real Durable history showed Extract and Card created in the same episode, then Map, Recon, Export Run Evidence and Log Batch Succeeded.
+  - `ops.BatchRun` gained 17 events for the run ID, all dated 2026-11-04:
+    - master Started (`trigger=Manual; triggerTimeUtc=2026-11-06T23:15:48…Z`);
+    - Extract 5,000 / 800 / 300 rows copied and merged as inserts;
+    - Card: no landing files left;
+    - Map Succeeded;
+    - Recon Reconciled (`card difference=0.00; GL items out of tolerance=0; tolerance=0.00`);
+    - master Succeeded with ObjectName `evidence/2026-11-04/batch-run-83bd62b3-….json`.
+  - The blob existed in Azurite: `application/json`, `retain_until=TBD`, 7,235 bytes, 48 entries.
+  - An earlier attempt passed the input inline. Through the npm shim it lost its quotes and became a JSON string, and the master failed at once with "could not be converted to NightlyBatchInput", writing nothing. Hence `@input.json` (ADR 0016).
+- **Timer run:**
+  - The command was `POST http://localhost:7071/admin/functions/TR_Nightly_0300_Pacific` (HTTP 202) at 23:19:18Z, which is 15:19 Pacific.
+  - The trigger logged `Started PL_Master_NightlyBatch 9a7c2d4c-… for business date 2026-11-05 (occurrence 2026-11-06 11:00:00Z…)`. The master **completed** with Started (`trigger=TR_Nightly_0300_Pacific; triggerTimeUtc=2026-11-06T11:00:00.0000000Z`), the four children (an empty day), Reconciled, and Succeeded with `evidence/2026-11-05/batch-run-9a7c2d4c-….json`.
+  - This check exposed a flaw in the first trigger design, which used the nearest occurrence: an afternoon run would have processed the current, incomplete day. The design was fixed to "latest at or before" before this run, and a unit test pins the case.
+- **Host logs:** both runs' host logs (about 40,000 lines, mostly Azure SDK traffic) were scanned. They contain none of the four secrets used (KSEXTRACT and cu_batch_writer passwords, KeyBridge password, webhook token), no orchestration input and no mapping JSON. The host was then stopped.
+
+**Gate:**
+- **Build:** `./build.ps1 build` clean, warnings as errors.
+- **Full suite, no `Category=Performance`, 647 tests (549 unit, 98 acceptance), on both stacks:**
+
+  | Stack | Run 1 | Run 2 |
+  | --- | --- | --- |
+  | `CU_TESTS_USE_COMPOSE=1` (the `./build.ps1 up` stack) | 647 pass, 0 fail, 0 skipped (4 m 18 s) | 647 pass, 0 fail, 0 skipped (3 m 37 s) |
+  | Testcontainers (`./build.ps1 test`, fresh containers) | 647 pass, 0 fail, 0 skipped (7 m 34 s) | 647 pass, 0 fail, 0 skipped (6 m 55 s) |
+
+- AT-01 to AT-19 all pass, each with its rerun assertion, none skipped. Phase 7 ended at 556 tests (549 pass, 7 fail): the 7 stubs now pass and 91 tests are new.
+- **Scans:** `./build.ps1 scan` found no leaks; `dotnet list package --vulnerable --include-transitive` found none.
+
+**Tests added (91):**
+- `MasterPolicyTests`: every policy, the dependency graph including the `Failed` and `Completed` conditions, the child parameters, the parameter defaults, the Resolve, Notes, ObjectName, Failed and Fail expressions, the Copy source and sink, the dataset, the non-retried input error, and `host.json` tracing.
+- `BusinessDateAndScheduleTests`: hand-checked midnight and DST cases, occurrences on both change days, early, late, past-due and afternoon fires, the golden DST schedule, the attribute against the ADF trigger and `local.settings.json`.
+- `MasterRunEventsTests`: the Failed-event builder (coded, uncoded, deep chain, cutting), the Started, Succeeded and Failed events, the evidence path and metadata, the `retainUntil` validation, the JSON format.
+- `MasterOrchestratorTests` (in-process host, the real children, fakes): order and parallelism; children's inputs and instance IDs; no sub-orchestration retry; evidence content; manual and triggered notes; every failure branch, including both children failing, the Failed log failing, an alert failure, evidence retries and permanent evidence failure, the Started log failing, and a non-GUID ID.
+- `NightlyTriggerTests`: one master per invocation, a new GUID each time, DST days, early fire, past due, the started master's events.
+- `OrchestratorReplayTests` (5): ADR 0017.
+- `NightlyBatchConversionTests` (acceptance, 3):
+  - Db2 refused through the master: Failed at Extract with `DB2Exception`, Card finishes, no evidence, a rerun changes nothing, and the AT-17 rules hold on the logs and failure details.
+  - The evidence file equals the procedure's result set in order.
+  - The sink against Azurite: a failed write leaves no blob, a failed retry leaves the old file intact, a three-block file is committed.
+
+**Differences from ADF a reviewer should know (ADR 0014 to ADR 0016):**
+- **Child error codes:** TXN_CODE_UNMAPPED is kept; a child that failed in an activity is recorded with the root cause's .NET type name (e.g. `DB2Exception`, `TimeoutException`), not an ADF numeric code. ErrorMessage is Durable's wording, not ADF's.
+- **Parallel failure:** when both Extract and Card fail, both Failed events are logged and the master names Extract. Whether ADF cancels the running sibling, and which Fail message it reports, is unconfirmed.
+- **Failure without a branch:** a failed Log Batch Started or Succeeded fails the master with the activity's failure, not BATCH_STEP_FAILED, and logs no Failed event. ADF also has no branch there.
+- **Evidence:**
+  - Written atomically; overwritten only by the same run ID.
+  - `retain_until` is metadata, as in ADF, with no index tag.
+  - ADF's indentation, BOM and NULL handling are unconfirmed; only the deterministic sections are compared.
+  - An unusable `retainUntil` fails at once, without retries.
+- **Trigger:**
+  - `TriggerTimeUtc` is the scheduled occurrence, not the actual fire time.
+  - A past-due start-up runs the latest missed day once and does not back-fill.
+  - A duplicate fire runs a second, idempotent master under a new GUID; two masters for one date running at the same time are not prevented.
+  - A manual run's trigger time is the orchestration's first execution time.
+
+**Not done in this phase (stated, not hidden):**
+- **OpenTelemetry export** to the Aspire dashboard (PRD observability NFR) is not configured. `Program.cs` adds no OpenTelemetry, and it would need new packages. The batch emits `ILogger` logs and .NET's own spans only. A follow-up should add the OTLP exporter and a `batchRunId` tag, and decide how the Durable worker's spans correlate.
+- **A retain-until blob index tag** (PRD wording, ADR 0004) is not set anywhere (ADR 0015).
+
+**Notes for Phase 9 (README and migration playbook):**
+- **Sub-orchestrations:**
+  - Execute Pipeline (`waitOnCompletion`) becomes `CallSubOrchestratorAsync`, parallel children `Task.WhenAll`, and the child gets the master's instance ID as `batchRunId`.
+  - Retry a sub-orchestration only if the ADF activity has a policy.
+  - Give children deterministic, readable instance IDs.
+- **Failure branches:**
+  - Map "Execute → on Failed: Log → on Completed: Fail" to try/catch around the call, log Failed with `StepFailure`, and throw `PipelineFailedException(BATCH_STEP_FAILED)`.
+  - The child's code survives only if it was a `PipelineFailedException`; otherwise it is the root-cause type.
+  - Say what happens when the log fails and when parallel siblings both fail.
+- **Evidence export:**
+  - Copy of a procedure to a JSON blob: stream it, and commit staged blocks only when complete (never `OpenWriteAsync`).
+  - Put the run ID in the path; metadata versus index tags; write-once storage is a deployment policy.
+- **Trigger and time zone:**
+  - `WEBSITE_TIME_ZONE` per environment (Windows `Pacific Standard Time`, Linux `America/Los_Angeles`); 03:00 avoids DST hours.
+  - The business date comes from the occurrence, not the fire time; mention the afternoon pitfall.
+  - Past-due and no-back-fill runbook; `RunOnStartup` false.
+  - Manual starts: `func durable start-new --input @file` and the admin endpoint.
+  - Core Tools via npm needed a manual extract on Node 24; winget is the PRD's route.
+- **Alerting semantics:**
+  - An undeliverable alert fails the batch at Reconciliation and alerts on the next run.
+  - A delivered and marked alert is silent on reruns; delivery is at least once (ADR 0013).
+- **Log hygiene:**
+  - `traceInputsAndOutputs` false; secrets never cross Durable boundaries; exception messages carry no values; mask numbers with `LogMask`.
+  - AT-17 scans logs, spans and failure details through the master; the real host's own logs were scanned in the `func start` check.
+- **Determinism:** the analyzer rules are build errors, and `ReplayBackend` and `ReplayCheck` are the pattern for replay-testing any new orchestrator.

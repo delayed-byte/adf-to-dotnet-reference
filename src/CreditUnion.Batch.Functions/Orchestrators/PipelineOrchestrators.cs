@@ -2,6 +2,7 @@ using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Concurrency;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Map;
+using CreditUnion.Batch.Core.Master;
 using CreditUnion.Batch.Core.Pipelines;
 using CreditUnion.Batch.Core.Reconciliation;
 using CreditUnion.Batch.Functions.Activities;
@@ -279,10 +280,146 @@ public static class ReconciliationOrchestrator
         new(input.BatchRunId, input.BusinessDate, PipelineNames.Reconciliation, status);
 }
 
-/// <summary>PL_Master_NightlyBatch: input <see cref="NightlyBatchInput"/>; the instance ID is the batchRunId.</summary>
+/// <summary>
+/// PL_Master_NightlyBatch: input <see cref="NightlyBatchInput"/>; the instance ID is the batchRunId (ADR 0008). Mirrors the ADF
+/// activities and dependencies (ADR 0014): resolve the business date; log Started; run Extract and Card Settlement as parallel
+/// sub-orchestrations; then Map and Aggregate; then Reconciliation; export the run evidence; log Succeeded. Each Execute
+/// Pipeline and the export has a failure branch: log Failed with the step name and the child's error code, then fail with
+/// BATCH_STEP_FAILED, so no later step starts. The orchestrator does no I/O and reads the time only from
+/// <c>context.CurrentUtcDateTime</c>; the Execute Pipeline activities have no ADF policy, so the sub-orchestrations are not retried.
+/// </summary>
 public static class NightlyBatchOrchestrator
 {
+    private static readonly MasterActivityPolicies Policies = MasterActivityPolicies.Adf;
+
     [Function(PipelineNames.Master)]
-    public static Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context) =>
-        throw new NotImplementedException($"{PipelineNames.Master} is not converted yet (docs/PRD.md, Phase 8).");
+    public static async Task RunAsync([OrchestrationTrigger] TaskOrchestrationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var input = context.GetInput<NightlyBatchInput>() ?? throw new InvalidOperationException($"{PipelineNames.Master} needs a NightlyBatchInput.");
+        if (!Guid.TryParse(context.InstanceId, out var batchRunId))
+        {
+            throw new InvalidOperationException($"The instance ID of {PipelineNames.Master} is its batchRunId and must be a GUID (ADR 0008).");
+        }
+
+        // pipeline().TriggerTime: the trigger's time, or for a run started by hand the time it started.
+        var startedUtc = context.CurrentUtcDateTime;
+        var triggerTime = input.TriggerTimeUtc ?? new DateTimeOffset(startedUtc, TimeSpan.Zero);
+        var logOptions = AdfRetry.Options(Policies.LogEvent);
+
+        // Resolve Business Date (Set Variable resolvedBusinessDate)
+        var run = new MasterRun(batchRunId, BusinessCalendar.Resolve(input.BusinessDate, triggerTime), logOptions);
+
+        // Log Batch Started
+        await context.CallActivityAsync(MasterActivityNames.LogEvent,
+            MasterRunEvents.Started(batchRunId, run.BusinessDate, input.TriggerName ?? MasterRunEvents.ManualTriggerName, triggerTime, startedUtc), logOptions);
+
+        // Execute Extract KeyStone and Execute Ingest Card Settlement: both depend only on Log Batch Started.
+        var child = new PipelineRunInput(run.BusinessDate, batchRunId);
+        var extract = ExecutePipelineAsync(context, run, PipelineNames.Extract, child);
+        var card = ExecutePipelineAsync(context, run, PipelineNames.CardSettlement, child);
+        await Task.WhenAll(extract, card);
+        ThrowIfFailed(await extract, await card);
+
+        // Execute Map And Aggregate: depends on both with "Succeeded".
+        ThrowIfFailed(await ExecutePipelineAsync(context, run, PipelineNames.MapAndAggregate, child));
+
+        // Execute Reconciliation (tolerance = reconTolerance)
+        ThrowIfFailed(await ExecutePipelineAsync(context, run, PipelineNames.Reconciliation, new ReconciliationInput(run.BusinessDate, batchRunId, input.ReconTolerance)));
+
+        // Export Run Evidence (Copy ops.usp_GetRunEvidence to evidence/{businessDate}/batch-run-{runId}.json)
+        RunEvidenceExport evidence;
+        try
+        {
+            evidence = await context.CallActivityAsync<RunEvidenceExport>(MasterActivityNames.ExportEvidence,
+                new ExportRunEvidenceRequest(batchRunId, run.BusinessDate, input.RetainUntil), AdfRetry.Options(Policies.ExportEvidence));
+        }
+        catch (TaskFailedException e)
+        {
+            // Log Failed At Evidence, then Fail At Evidence
+            throw (await RecordFailureAsync(context, run, MasterSteps.ExportRunEvidence, e)).ToException();
+        }
+
+        // Log Batch Succeeded
+        await context.CallActivityAsync(MasterActivityNames.LogEvent,
+            MasterRunEvents.Succeeded(batchRunId, run.BusinessDate, evidence.ObjectName, context.CurrentUtcDateTime), logOptions);
+    }
+
+    /// <summary>The sub-orchestration instance ID of a child: readable in the Durable instance list and deterministic under replay.</summary>
+    public static string ChildInstanceId(string masterInstanceId, string pipeline) => masterInstanceId + ":" + pipeline;
+
+    /// <summary>A Durable failure chain, outermost first: type names and messages only (ADR 0008).</summary>
+    public static IReadOnlyList<FailureLink> Chain(TaskFailureDetails failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        var chain = new List<FailureLink>();
+        for (var link = failure; link is not null; link = link.InnerFailure)
+        {
+            chain.Add(new FailureLink(link.ErrorType, link.ErrorMessage));
+        }
+
+        return chain;
+    }
+
+    /// <summary>
+    /// Execute Pipeline with waitOnCompletion, plus its failure branch: "Log Failed At …" runs on the Failed condition as soon as
+    /// this child fails (its sibling may still be running), and "Fail At …" depends on it with "Completed". Returns the failure,
+    /// so the caller decides when to fail, after a parallel sibling has finished.
+    /// </summary>
+    private static async Task<FailedStep?> ExecutePipelineAsync(TaskOrchestrationContext context, MasterRun run, string pipeline, object input)
+    {
+        try
+        {
+            await context.CallSubOrchestratorAsync(pipeline, input, new SubOrchestrationOptions(instanceId: ChildInstanceId(context.InstanceId, pipeline)));
+            return null;
+        }
+        catch (TaskFailedException e)
+        {
+            return await RecordFailureAsync(context, run, pipeline, e);
+        }
+    }
+
+    /// <summary>"Log Failed At {step}": the step name, the child's error code and its message (ADR 0007, ADR 0014).</summary>
+    private static async Task<FailedStep> RecordFailureAsync(TaskOrchestrationContext context, MasterRun run, string stepName, TaskFailedException exception)
+    {
+        var failure = StepFailure.From(stepName, Chain(exception.FailureDetails));
+        context.CreateReplaySafeLogger(typeof(NightlyBatchOrchestrator).FullName!).LogStepFailed(failure.StepName, failure.ErrorCode, run.BusinessDate);
+        try
+        {
+            await context.CallActivityAsync(MasterActivityNames.LogEvent,
+                MasterRunEvents.Failed(run.BatchRunId, run.BusinessDate, failure, context.CurrentUtcDateTime), run.LogOptions);
+        }
+        catch (TaskFailedException e)
+        {
+            // "Fail At …" depends on "Log Failed At …" with the condition "Completed": the run fails either way.
+            context.CreateReplaySafeLogger(typeof(NightlyBatchOrchestrator).FullName!).LogFailedEventNotLogged(failure.StepName, e.FailureDetails.ErrorType);
+        }
+
+        return new FailedStep(failure, exception);
+    }
+
+    /// <summary>Fail At …: the first failed step in pipeline order (Extract before Card when both failed).</summary>
+    private static void ThrowIfFailed(params FailedStep?[] steps)
+    {
+        if (steps.FirstOrDefault(s => s is not null) is { } failed)
+        {
+            throw failed.ToException();
+        }
+    }
+
+    private sealed record MasterRun(Guid BatchRunId, DateOnly BusinessDate, TaskOptions LogOptions);
+
+    private sealed record FailedStep(StepFailure Failure, TaskFailedException Cause)
+    {
+        public PipelineFailedException ToException() => new(PipelineErrorCodes.BatchStepFailed, Failure.FailMessage, Cause);
+    }
+}
+
+internal static partial class MasterOrchestratorLog
+{
+    [LoggerMessage(Level = LogLevel.Error, Message = "PL_Master_NightlyBatch for {BusinessDate:yyyy-MM-dd}: step {StepName} failed with {ErrorCode}; no later step runs.")]
+    public static partial void LogStepFailed(this ILogger logger, string stepName, string errorCode, DateOnly businessDate);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Log Failed At {StepName} failed ({ErrorType}); failing with BATCH_STEP_FAILED anyway, as the ADF Fail activity's 'Completed' dependency does.")]
+    public static partial void LogFailedEventNotLogged(this ILogger logger, string stepName, string errorType);
 }

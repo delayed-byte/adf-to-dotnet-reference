@@ -47,12 +47,17 @@ public sealed class LogCaptureAndPolicyTests
 
         var findings = capture.Findings([Secret], Numbers);
 
+        // LogCapture listens to every ActivitySource in the process, so a span from a test running at the same time
+        // (an HttpClient call) can land in this capture. Count only this test's own spans.
+        var ownSpan = capture.Spans.Select((s, i) => (s.Source, Number: i + 1)).Single(s => s.Source == source.Name).Number;
+        findings = [.. findings.Where(f => !f.StartsWith("span #", StringComparison.Ordinal) || f.Contains($"[{source.Name} ", StringComparison.Ordinal))];
+
         findings.ShouldBe(
         [
             "log #2 [Debug Test] contains the KeyBridge password",
             "log #3 [Trace Test] contains account number ending 0001",
             "log #4 [Error Test] contains the KeyBridge password",
-            "span #1 [CreditUnion.Batch.UnitTests.LogCapture 'call'] contains account number ending 0001",
+            $"span #{ownSpan} [CreditUnion.Batch.UnitTests.LogCapture 'call'] contains account number ending 0001",
             "orchestration failure contains card number ending 1234",
         ], ignoreOrder: true);
         findings.ShouldAllBe(f => !f.Contains(Secret.Value, StringComparison.OrdinalIgnoreCase) && !f.Contains(AccountNumber, StringComparison.Ordinal));

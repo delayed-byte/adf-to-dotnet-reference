@@ -1,6 +1,7 @@
 using CreditUnion.Batch.Core.Card;
 using CreditUnion.Batch.Core.Extract;
 using CreditUnion.Batch.Core.Map;
+using CreditUnion.Batch.Core.Master;
 using CreditUnion.Batch.Core.Reconciliation;
 using Microsoft.DurableTask;
 
@@ -33,6 +34,7 @@ public static class AdfRetry
             && !failure.IsCausedBy<KeyBridgeConfigurationException>() && !failure.IsCausedBy<GlMappingInvalidException>()
             && !failure.IsCausedBy<GlAggregationException>()
             && !failure.IsCausedBy<ReconAlertRejectedException>() && !failure.IsCausedBy<ReconAlertConfigurationException>()
-            && !failure.IsCausedBy<ReconInputException>();
+            && !failure.IsCausedBy<ReconInputException>()
+            && !failure.IsCausedBy<RunEvidenceInputException>();
     }
 }

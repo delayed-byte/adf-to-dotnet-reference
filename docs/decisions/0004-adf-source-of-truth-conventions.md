@@ -25,7 +25,7 @@ No Azure subscription exists, so the five pipelines in `adf/` are hand-authored 
 - **No nested If.** ADF cannot nest an If Condition in another, so `PL_Reconciliation` records exceptions first (a Lookup over `ops.usp_RecordReconExceptions`) and the single If decides only whether an alert is still due.
 - **Lookups that write.** Two Lookups call procedures that write: settlement validation and recording recon exceptions. This is a common ADF pattern for returning a result from a write.
 - **Rounding in the data flow.** The data flow rounds with `round(x, 2, 7)` (ROUND_HALF_EVEN) and converts straight back to `decimal`, because `round()` returns a double. The Phase 6 ADR decides how .NET reproduces this.
-- **Blob tags.** ADF can set blob metadata but not index tags, so archived files carry `retain_until` metadata (value `TBD`). The .NET version sets a retain-until index tag.
+- **Blob tags.** ADF can set blob metadata but not index tags, so archived files carry `retain_until` metadata (value `TBD`). The .NET version sets a retain-until index tag. *(Superseded in part, 2026-11-06: no phase implemented the index tag; archived, quarantined and evidence blobs carry `retain_until` metadata, as ADF does. See ADR 0015.)*
 - **Evidence.** The ADF master pipeline exports `ops.usp_GetRunEvidence` to `evidence/{businessDate}/batch-run-{runId}.json`.
 
 ## Consequences
