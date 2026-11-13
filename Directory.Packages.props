@@ -27,7 +27,7 @@
     <PackageVersion Include="Testcontainers.Azurite" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.Db2" Version="4.16.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
-    <PackageVersion Include="WireMock.Net.Minimal" Version="2.19.0" />
+    <PackageVersion Include="WireMock.Net.Minimal" Version="2.31.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
