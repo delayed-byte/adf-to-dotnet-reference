@@ -9,13 +9,14 @@
     ./build.ps1 test    # run the test suite (Category=Performance excluded; add -Performance to run only those)
     ./build.ps1 golden  # regenerate tests/TestData inputs and golden outputs (add -Scenario NAME for one)
     ./build.ps1 run     # start the Functions host (requires Azure Functions Core Tools)
+    ./build.ps1 infra   # compile and lint the Azure Bicep template (needs the Bicep CLI)
     ./build.ps1 scan    # gitleaks secret scan (via Docker)
     ./build.ps1 down    # stop containers (add -Volumes to delete data)
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('up', 'down', 'build', 'seed', 'test', 'golden', 'run', 'scan')]
+    [ValidateSet('up', 'down', 'build', 'seed', 'test', 'golden', 'run', 'infra', 'scan')]
     [string]$Command = 'build',
     [switch]$Volumes,
     [switch]$Performance,
@@ -119,6 +120,24 @@ switch ($Command) {
         Invoke-Native dotnet @('build', 'src/CreditUnion.Batch.Functions', '--nologo')
         Push-Location src/CreditUnion.Batch.Functions
         try { Invoke-Native func @('start') } finally { Pop-Location }
+    }
+    'infra' {
+        # Compiles and lints the Azure template offline (ADR 0020); no subscription needed.
+        # Needs the standalone Bicep CLI on PATH; az bicep takes different arguments and may stop to prompt.
+        $bicep = (Get-Command bicep -ErrorAction SilentlyContinue).Source
+        if (-not $bicep) {
+            $azBicep = Join-Path $HOME '.azure/bin/bicep.exe'
+            if (-not (Test-Path $azBicep)) {
+                throw 'Bicep CLI not found. Install with: winget install Microsoft.Bicep (or az bicep install)'
+            }
+            $bicep = $azBicep
+        }
+        $out = Join-Path ([System.IO.Path]::GetTempPath()) 'cu-batch-bicep'
+        New-Item -ItemType Directory -Force $out | Out-Null
+        Invoke-Native $bicep @('build', 'infra/main.bicep', '--outdir', $out)
+        Invoke-Native $bicep @('lint', 'infra/main.bicep')
+        Invoke-Native $bicep @('build-params', 'infra/main.prod.bicepparam', '--outfile', (Join-Path $out 'main.prod.parameters.json'))
+        Write-Host 'infra/main.bicep compiles and lints clean.'
     }
     'scan' {
         Invoke-Native docker @('run', '--rm', '-v', "${PSScriptRoot}:/repo", 'zricethezav/gitleaks:v8.21.2', 'detect', '--source', '/repo', '--no-git', '--redact')

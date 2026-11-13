@@ -8,7 +8,7 @@ A worked example of moving Azure Data Factory (ADF) pipelines to .NET C#. The se
 - All data is **synthetic**. The Db2 schema is invented. It is not KeyStone's licensed schema. The KeyBridge contract is a placeholder.
 - It is **not affiliated with or endorsed by** Corelation, IBM or Microsoft. Product names belong to their owners and are used only to describe the setting.
 - It demonstrates controls in line with NCUA expectations: a read-only extract login, separate writer and reader logins, masked logs, an append-only audit trail, and an evidence file for each run. **It does not claim compliance** with any regulation.
-- Nothing is deployed to Azure. Everything runs on one developer machine in Docker containers.
+- Nothing is deployed to Azure. Everything runs on one developer machine in Docker containers. A Bicep template for the Function App is in [infra/](infra/) ([ADR 0020](docs/decisions/0020-azure-hosting-plan-and-bicep-template.md)). It compiles and lints, but it has never been deployed.
 - ADF could never be run here. The ADF JSON in `adf/` was written by hand, and the golden outputs were derived from it. An engineering review signed them off, not a business reviewer ([ADR 0007](docs/decisions/0007-golden-output-sign-off.md)). A business reviewer must confirm them before any go-live.
 
 ## The one command
@@ -82,6 +82,7 @@ Run all of them from the repository root in PowerShell 7.
 | `./build.ps1 test -Performance` | Runs only the one-million-row extract test. Its 135 MB of input is generated into the git-ignored `tests/TestData/generated`. | No | About 5 min 24 s against a running stack (324 s measured, mostly loading a million rows into Db2). Without `up`, add the Db2 start time. |
 | `./build.ps1 golden` | Regenerates the test inputs and golden outputs from the seeded generator. Add `-Scenario NAME` for one scenario. | No | About 7 s |
 | `./build.ps1 run` | Builds and starts the Functions host (`func start`). | Yes | |
+| `./build.ps1 infra` | Compiles and lints the Azure Bicep template in `infra/`. Needs the Bicep CLI (`winget install Microsoft.Bicep`, or `az bicep install`), no subscription. | No | About 10 s |
 | `./build.ps1 scan` | Secret scan with gitleaks, run in Docker. | No | About 17 s with the image already pulled |
 | `./build.ps1 down` | Stops the containers. Add `-Volumes` to delete the SQL Server and Azurite data too. | | few seconds |
 
@@ -208,7 +209,7 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 ## Known limitations and open items
 
 - **No OpenTelemetry export.** The PRD asks for traces in the Aspire dashboard. `Program.cs` adds no OpenTelemetry, so the dashboard shows no batch traces. The batch writes `ILogger` logs and .NET's own spans only. A follow-up needs an OTLP exporter, a `batchRunId` tag and a rule for correlating the Durable worker's spans.
-- **No Azure deployment.** The [deployment checklist](docs/migration-playbook.md#azure-deployment-checklist) lists what is open.
+- **No Azure deployment.** [infra/main.bicep](infra/main.bicep) describes an Elastic Premium Windows Function App ([ADR 0020](docs/decisions/0020-azure-hosting-plan-and-bicep-template.md)), but it was never deployed. The [deployment checklist](docs/migration-playbook.md#azure-deployment-checklist) lists what is open.
 - **Golden outputs are not business-reviewed.** See above and [tests/TestData/REVIEW.md](tests/TestData/REVIEW.md).
 - **Several ADF behaviours are unconfirmed.** The [playbook](docs/migration-playbook.md#differences-from-adf-and-items-to-verify) has the full checklist.
 - **No retain-until index tag.** Archived, quarantined and evidence blobs carry `retain_until` metadata (`TBD`), as ADF does. [ADR 0015](docs/decisions/0015-run-evidence-export.md) explains.
@@ -241,9 +242,10 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 | --- | --- |
 | [docs/PRD.md](docs/PRD.md) | Scope, requirements, build phases, definition of done |
 | [docs/migration-playbook.md](docs/migration-playbook.md) | How a credit union takes one real ADF pipeline through this process; deployment checklist; traceability of every ADF activity |
-| [docs/decisions/](docs/decisions/) | One ADR per significant decision (0001 to 0019) |
+| [docs/decisions/](docs/decisions/) | One ADR per significant decision (0001 to 0020) |
 | [docs/progress.md](docs/progress.md) | What each build phase did, tested and left open |
 | [adf/](adf/) | The ADF JSON, the source of truth for behaviour |
+| [infra/](infra/) | Bicep template for the Function App in Azure (not deployed) |
 | [db/](db/) | The synthetic Db2 schema and the SQL Server reporting store |
 | [contracts/](contracts/) | The KeyBridge placeholder contract and the card settlement file format |
 | [tests/TestData/README.md](tests/TestData/README.md) | Scenarios, inputs, golden outputs |

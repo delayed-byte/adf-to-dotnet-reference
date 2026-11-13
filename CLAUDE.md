@@ -13,6 +13,7 @@ Reference implementation of an Azure Data Factory → .NET C# migration for a cr
 | `./build.ps1 test` | Run all tests except `Category=Performance` (Testcontainers starts Db2, SQL Server, Azurite; `CU_TESTS_USE_COMPOSE=1` reuses the `up` stack) |
 | `./build.ps1 golden` | Regenerate `tests/TestData` inputs and golden outputs from the seeded generator (`-Scenario NAME` for one) |
 | `./build.ps1 run` | Start the Functions host (`func start`) |
+| `./build.ps1 infra` | Compile and lint the Azure Bicep template in `infra/` (Bicep CLI; not deployed, ADR 0020) |
 | `./build.ps1 scan` | gitleaks secret scan |
 
 ## Rules

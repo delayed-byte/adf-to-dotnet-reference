@@ -630,3 +630,52 @@ Commit hashes in this file refer to the history after the author email was chang
 - README, playbook and ADRs: the Dapper/CsvHelper gap now has an ADR, still Proposed. OpenTelemetry remains a gap.
 
 **Still open:** business sign-off of golden outputs (ADR 0007); approval of ADR 0018 and ADR 0019; immutability versus overwrite; retention period; retain-until index tag; OpenTelemetry export (needs approval to change `src`); CI (the repository has no remote); Azure deployment; long clone paths.
+
+## Azure template – Bicep for the Function App (2026-11-13)
+
+Done at the owner's request. Deploying stays a v1 non-goal (PRD). This turns the deployment checklist's hosting rows into a template that compiles and is tested against the code, but is **not deployed**.
+
+- **ADR 0020** (Proposed) chooses **Elastic Premium EP1 on Windows**:
+  - Windows Consumption stops a function after 10 minutes, and ADF timeouts reach 2 hours.
+  - Flex Consumption is Linux-only and needs the untested `-lnx` Db2 driver.
+  - EP1 supports VNet integration for the private path to Db2.
+- **`infra/main.bicep`** creates:
+  - a user-assigned identity;
+  - identity-only host storage (shared key off), with a `deployments` container for the run-from-package URL, so there is no Azure Files;
+  - Log Analytics and Application Insights, with local auth off;
+  - the EP1 plan and the Function App, with optional VNet integration.
+- **`infra/modules/shared-access.bicep`** grants the identity Key Vault Secrets User on the existing vault. It also writes `batch-blob-storage-connection-string` from the existing data account's key. That is a stopgap until the blob code uses an identity.
+- **`infra/main.prod.bicepparam`** is an example parameter file, using the ADF names for the vault and the storage account.
+- **Settings and secrets.** Key Vault references use the ADF secret names. Db2 uses ADR 0019 option A (`keystone-db2-extract-connection-string`) until that ADR is decided.
+- **`host.json` `functionTimeout` = `02:30:00`.** It was unset, and Premium's 30-minute default would have killed `Copy Db2 To Staging` (1 h) and `Aggregate Daily GL Totals` (2 h) before their per-attempt timeouts fired.
+- **`./build.ps1 infra`** compiles and lints the template and the parameter file with the Bicep CLI (0.49.2, about 10 s). It reports no warnings.
+- **`InfrastructureTemplateTests`** (7 tests) read the template as text and check:
+  - option app settings against the options classes;
+  - secret names against the ADF JSON;
+  - `WEBSITE_TIME_ZONE` against the trigger;
+  - `functionTimeout` against the longest ADF timeout;
+  - the task hub prefix.
+
+  Breaking the template on purpose (removing `ReconAlertWebhook__Url`, renaming a secret, setting `UTC`, setting `functionTimeout` to 1 h 30 min) made 5 of the 7 fail, as intended.
+- **Docs.** README (commands, limitations, documentation map) and the playbook (Step 5 and checklist rows) point to the template.
+- **Results:**
+  - Full suite (`dotnet test`, performance excluded, Testcontainers): **659 passed, 0 failed, 0 skipped, 7 min 28 s.**
+  - `./build.ps1 scan`: no leaks. Its first run flagged the Key Vault Secrets User role GUID in a variable named `…SecretsUser`. That was a false positive, fixed by renaming the variable.
+
+**NuGet audit failure, fixed by upgrading WireMock.Net.**
+- **Cause.** `./build.ps1 build` and `./build.ps1 test` failed with NU1902 (warnings as errors). `Microsoft.AspNetCore.WebUtilities` 2.3.0 has a moderate advisory, GHSA-6527-9fp8-r4x6 (CVE-2026-118750, published 2026-11-10, patched in 2.3.14). It came in through `WireMock.Net.Minimal` 2.19.0 → `WireMock.Net.Shared` → `Microsoft.AspNetCore.Http` 2.3.9, in the three test projects only. It was not caused by this change.
+- **Fix.** At the owner's choice, `WireMock.Net.Minimal` went from 2.19.0 to **2.31.0**. That is the only release that clears the advisory: it depends on `Microsoft.AspNetCore.Http` and `WebUtilities` 2.3.14. 2.21.0 and 2.30.0 still pull 2.3.0.
+- **Age.** 2.31.0 was published 2026-11-12, one day before the upgrade. It was taken anyway because no older release has the fix.
+- **After the upgrade:**
+  - `dotnet list package --vulnerable --include-transitive` finds nothing in any project;
+  - `./build.ps1 build` succeeds;
+  - `./build.ps1 test` (no audit override): **659 passed, 0 failed, 0 skipped, 6 min 48 s.**
+
+**Not verified (no subscription):**
+- any deployment or `what-if`;
+- .NET 10 isolated on a Windows EP plan;
+- run-from-package URL with no Azure Files on EP;
+- identity-based host storage with the Durable Azure Storage backend;
+- the Db2 driver writing `db2dsdriver.cfg` under `%TEMP%` in App Service.
+
+**Still open:** as before, plus approval of ADR 0020.
