@@ -241,6 +241,7 @@ Other test groups: unit tests for the services, the ADF JSON validator, the poli
 | Document | Purpose |
 | --- | --- |
 | [docs/PRD.md](docs/PRD.md) | Scope, requirements, build phases, definition of done |
+| [docs/architecture.md](docs/architecture.md) | Diagrams: the Azure deployment, the nightly batch flow, the code structure |
 | [docs/migration-playbook.md](docs/migration-playbook.md) | How a credit union takes one real ADF pipeline through this process; deployment checklist; traceability of every ADF activity |
 | [docs/decisions/](docs/decisions/) | One ADR per significant decision (0001 to 0020) |
 | [docs/progress.md](docs/progress.md) | What each build phase did, tested and left open |
